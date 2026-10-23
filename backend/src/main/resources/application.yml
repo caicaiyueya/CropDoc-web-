@@ -1,0 +1,50 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: yun-nong-zhi-zhen
+  datasource:
+    url: jdbc:mysql://localhost:3306/yunnongzhizhen?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:your_password_here}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+
+app:
+  upload:
+    base-path: ${UPLOAD_BASE_PATH:./uploads}
+    url-prefix: /uploads
+
+jwt:
+  secret: ${JWT_SECRET:please_change_me_to_a_long_random_secret_at_least_256_bits}
+  expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+
+deepseek:
+  api-key: ${DEEPSEEK_API_KEY:your_deepseek_api_key_here}
+  base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+  vision-model: ${DEEPSEEK_VISION_MODEL:deepseek-chat}
+  chat-model: ${DEEPSEEK_CHAT_MODEL:deepseek-chat}
+  connect-timeout-ms: 10000
+  read-timeout-ms: 60000
+
+logging:
+  level:
+    com.yunnongzhizhen: info
+    org.springframework.security: warn
