@@ -126,7 +126,6 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { createReport, markQuality, postDetail } from '@/api/post'
-import { getSeedComments, getSeedPost } from '@/mock/communitySeed'
 import { useUserStore } from '@/store/user'
 import { unpackPostImages } from '@/utils/postMedia'
 
@@ -226,17 +225,6 @@ function mergeComments(baseList) {
   return [...local, ...rest]
 }
 
-function applySeed(id) {
-  const seed = getSeedPost(id)
-  if (!seed) return false
-  post.value = {
-    ...seed,
-    images: Array.isArray(seed.images) ? seed.images[0] : seed.images
-  }
-  comments.value = mergeComments(getSeedComments(id))
-  return true
-}
-
 async function load() {
   loading.value = true
   try {
@@ -244,10 +232,8 @@ async function load() {
     post.value = res.data?.post || null
     comments.value = mergeComments(res.data?.comments || [])
   } catch {
-    if (!applySeed(route.params.id)) {
-      post.value = null
-      comments.value = []
-    }
+    post.value = null
+    comments.value = []
   } finally {
     loading.value = false
   }

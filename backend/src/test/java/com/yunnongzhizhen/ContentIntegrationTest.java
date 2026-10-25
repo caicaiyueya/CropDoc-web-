@@ -81,7 +81,7 @@ class ContentIntegrationTest {
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"cropId":%d,"name":"基础稻瘟","description":"基础","preventionAdvice":"清园","level":"BASIC"}
+                                {"cropId":%d,"name":"基础稻瘟","description":"基础","preventionAdvice":"清园"}
                                 """.formatted(cropId)))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -92,7 +92,7 @@ class ContentIntegrationTest {
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"cropId":%d,"name":"专业纹枯","description":"专业","preventionAdvice":"药剂轮换","level":"PRO"}
+                                {"cropId":%d,"name":"专业纹枯","description":"专业","preventionAdvice":"药剂轮换"}
                                 """.formatted(cropId)))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -105,11 +105,11 @@ class ContentIntegrationTest {
 
         mockMvc.perform(get("/api/user/disease/" + basicId).header("Authorization", "Bearer " + farmerToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.level").value("BASIC"));
+                .andExpect(jsonPath("$.data.name").value("基础稻瘟"));
 
         mockMvc.perform(get("/api/user/disease/" + proId).header("Authorization", "Bearer " + farmerToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.level").value("PRO"));
+                .andExpect(jsonPath("$.data.name").value("专业纹枯"));
 
         // 个人中心
         mockMvc.perform(put("/api/user/profile")

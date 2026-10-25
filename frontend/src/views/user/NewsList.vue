@@ -41,7 +41,7 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { newsList } from '@/api/content'
-import { MOCK_NEWS, resolveNewsList } from '@/utils/newsMock'
+import { resolveNewsList } from '@/utils/newsMock'
 
 const router = useRouter()
 const list = ref([])
@@ -54,35 +54,18 @@ function formatTime(t) {
 }
 
 function goDetail(n) {
-  if (!n?.id || String(n.id).startsWith('mock-')) {
-    // Mock 资讯：用 query 展示摘要，避免请求不存在的后端 id
-    router.push({
-      path: '/user/news/mock',
-      query: {
-        title: n.title,
-        time: n.createTime || '',
-        content: n.content || n.summary || ''
-      }
-    })
-    return
-  }
+  if (!n?.id) return
   router.push(`/user/news/${n.id}`)
 }
 
 async function load() {
   loading.value = true
   try {
-    // 后端参数为 page / size（兼容 pageSize）
     const res = await newsList({ page: 1, size: 10, pageSize: 10 })
     const records = res.data?.records || res.data?.list || []
-    if (Array.isArray(records) && records.length) {
-      list.value = resolveNewsList(records)
-    } else {
-      // 接口空数组：展示 Mock，避免整页空白
-      list.value = resolveNewsList([])
-    }
+    list.value = resolveNewsList(records)
   } catch {
-    list.value = [...MOCK_NEWS]
+    list.value = []
   } finally {
     loading.value = false
   }

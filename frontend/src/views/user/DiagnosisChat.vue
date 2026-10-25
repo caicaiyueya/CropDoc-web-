@@ -12,17 +12,26 @@
           新建对话
         </el-button>
         <div class="session-list">
-          <button
+          <div
             v-for="s in sessions"
             :key="s.sessionId"
-            type="button"
             class="session-item"
             :class="{ active: s.sessionId === activeSessionId }"
             @click="switchSession(s.sessionId)"
           >
-            <span class="session-title">{{ s.title }}</span>
-            <span class="session-time">{{ formatTime(s.updatedAt) }}</span>
-          </button>
+            <div class="session-main">
+              <span class="session-title">{{ s.title }}</span>
+              <span class="session-time">{{ formatTime(s.updatedAt) }}</span>
+            </div>
+            <button
+              type="button"
+              class="session-del"
+              title="删除会话"
+              @click.stop="onDeleteSession(s)"
+            >
+              <el-icon :size="16"><Delete /></el-icon>
+            </button>
+          </div>
           <el-empty v-if="!sessions.length" description="暂无会话" :image-size="56" />
         </div>
       </aside>
@@ -139,8 +148,8 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete, Plus } from '@element-plus/icons-vue'
 import { diagnosisChat } from '@/api/detection'
 import { useHistoryStore } from '@/store/history'
 import { getCauseTips, getPreventionTips } from '@/utils/diseaseMap'
@@ -304,6 +313,42 @@ function switchSession(sessionId) {
   messages.value = (s.messages || []).map((m) => ({ ...m }))
   applyMeta(s.meta || {})
   scrollBottom()
+}
+
+/** 删除后：切到最新另一条，或清空至欢迎态 */
+function resetToWelcome() {
+  activeSessionId.value = ''
+  messages.value = []
+  applyMeta({})
+  autoAsked.value = false
+  autoHistorySaved.value = false
+}
+
+async function onDeleteSession(s) {
+  if (!s?.sessionId || loading.value) return
+  try {
+    await ElMessageBox.confirm('确定要删除该会话记录吗？', '删除确认', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
+  const id = s.sessionId
+  const wasActive = id === activeSessionId.value
+  sessions.value = sessions.value.filter((x) => x.sessionId !== id)
+  persistSessions()
+
+  if (wasActive) {
+    if (sessions.value.length) {
+      switchSession(sessions.value[0].sessionId)
+    } else {
+      resetToWelcome()
+    }
+  }
+  ElMessage.success('删除成功')
 }
 
 function formatTime(iso) {
@@ -552,11 +597,11 @@ watch(
   border: 1px solid #eef2f0;
   background: #fafbfa;
   border-radius: 12px;
-  padding: 10px 12px;
+  padding: 10px 10px 10px 12px;
   cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: flex-start;
+  gap: 6px;
   transition: 0.15s ease;
 }
 .session-item:hover {
@@ -565,6 +610,13 @@ watch(
 .session-item.active {
   background: #eaf8ee;
   border-color: #28b446;
+}
+.session-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 .session-title {
   font-size: 0.88rem;
@@ -579,6 +631,31 @@ watch(
 .session-time {
   font-size: 0.72rem;
   color: #9ca3af;
+}
+.session-del {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin-top: 2px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #ef4444;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+.session-item:hover .session-del,
+.session-item.active .session-del {
+  opacity: 1;
+  pointer-events: auto;
+}
+.session-del:hover {
+  background: #fef2f2;
 }
 
 .chat-head {

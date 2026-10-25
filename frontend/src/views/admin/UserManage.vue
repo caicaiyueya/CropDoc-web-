@@ -1,68 +1,167 @@
 <template>
-  <div>
-    <div class="toolbar">
-      <el-input v-model="keyword" placeholder="关键词" clearable style="width: 180px" />
-      <el-select v-model="role" clearable placeholder="角色" style="width: 140px">
-        <el-option label="FARMER" value="FARMER" />
-        <el-option label="EXPERT" value="EXPERT" />
-        <el-option label="ADMIN" value="ADMIN" />
-      </el-select>
-      <el-select v-model="status" clearable placeholder="状态" style="width: 140px">
-        <el-option label="NORMAL" value="NORMAL" />
-        <el-option label="DISABLED" value="DISABLED" />
-      </el-select>
-      <el-button type="primary" @click="load">查询</el-button>
+  <div class="admin-page">
+    <el-tabs v-model="activeTab" class="page-tabs">
+      <el-tab-pane label="用户列表" name="users" />
+      <el-tab-pane label="认证审核" name="cert" />
+    </el-tabs>
+
+    <div v-show="activeTab === 'users'" class="table-container">
+      <div class="filter-bar">
+        <el-input
+          v-model="keyword"
+          clearable
+          placeholder="搜索账号 / 昵称"
+          class="filter-input"
+          @keyup.enter="load"
+        />
+        <el-button type="primary" @click="load">查询</el-button>
+        <el-button @click="onResetFilter">重置</el-button>
+      </div>
+
+      <el-table v-if="list.length" :data="list" v-loading="loading" stripe class="data-table">
+        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column prop="username" label="账号" min-width="120" />
+        <el-table-column prop="nickname" label="昵称" min-width="110" />
+        <el-table-column label="是否农技员" width="120">
+          <template #default="{ row }">
+            <el-tag
+              size="small"
+              effect="light"
+              :type="row.role === 'EXPERT' ? 'success' : 'info'"
+            >
+              {{ roleLabel(row.role) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="region" label="地区" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.region || '—' }}</template>
+        </el-table-column>
+        <el-table-column prop="contact" label="联系方式" min-width="130" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.contact || '—' }}</template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.status === 'NORMAL' ? 'success' : 'danger'" effect="plain">
+              {{ row.status === 'NORMAL' ? '正常' : '禁用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" min-width="260" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.role === 'FARMER'"
+              type="primary"
+              link
+              @click="onSetExpert(row)"
+            >
+              设为农技员
+            </el-button>
+            <el-button type="primary" link @click="onRole(row)">调角色</el-button>
+            <el-button type="primary" link @click="onResetPwd(row)">重置密码</el-button>
+            <el-popconfirm
+              v-if="row.status === 'NORMAL'"
+              title="确定禁用该用户？"
+              confirm-button-text="禁用"
+              cancel-button-text="取消"
+              @confirm="onDisable(row)"
+            >
+              <template #reference>
+                <el-button type="danger" link>禁用</el-button>
+              </template>
+            </el-popconfirm>
+            <el-button v-else type="success" link @click="onEnable(row)">启用</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-empty v-else-if="!loading" description="暂无农户 / 农技员数据" :image-size="100" />
     </div>
-    <el-table :data="list" border stripe>
-      <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column prop="username" label="账号" width="140" />
-      <el-table-column prop="nickname" label="昵称" width="120" />
-      <el-table-column prop="role" label="角色" width="100" />
-      <el-table-column prop="status" label="状态" width="100" />
-      <el-table-column label="操作" min-width="280">
-        <template #default="{ row }">
-          <el-button link @click="onRole(row)">调角色</el-button>
-          <el-button link @click="onReset(row)">重置密码</el-button>
-          <el-button v-if="row.status === 'NORMAL'" link type="danger" @click="onDisable(row)">禁用</el-button>
-          <el-button v-else link type="success" @click="onEnable(row)">启用</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+
+    <div v-show="activeTab === 'cert'" class="cert-wrap">
+      <CertificationReview embedded />
+    </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { adminUserList, changeUserRole, disableUser, enableUser, resetUserPassword } from '@/api/admin'
+import {
+  adminUserList,
+  changeUserRole,
+  disableUser,
+  enableUser,
+  resetUserPassword
+} from '@/api/admin'
+import CertificationReview from './CertificationReview.vue'
 
+const route = useRoute()
+const router = useRouter()
+
+const activeTab = ref(route.query.tab === 'cert' ? 'cert' : 'users')
 const list = ref([])
+const loading = ref(false)
 const keyword = ref('')
-const role = ref()
-const status = ref()
+
+function roleLabel(r) {
+  return { FARMER: '农户', EXPERT: '农技员' }[r] || r || '—'
+}
+
+watch(activeTab, (tab) => {
+  router.replace({ query: tab === 'cert' ? { tab: 'cert' } : {} })
+})
 
 async function load() {
-  const res = await adminUserList({
-    keyword: keyword.value || undefined,
-    role: role.value || undefined,
-    status: status.value || undefined,
-    page: 1,
-    size: 50
-  })
-  list.value = res.data?.records || []
+  loading.value = true
+  try {
+    const res = await adminUserList({
+      keyword: keyword.value || undefined,
+      page: 1,
+      size: 100
+    })
+    // 仅展示农户与农技员，过滤 ADMIN
+    list.value = (res.data?.records || []).filter(
+      (u) => u.role === 'FARMER' || u.role === 'EXPERT'
+    )
+  } finally {
+    loading.value = false
+  }
+}
+
+function onResetFilter() {
+  keyword.value = ''
+  load()
+}
+
+async function onSetExpert(row) {
+  try {
+    await ElMessageBox.confirm(`将「${row.nickname || row.username}」设为认证农技员？`, '设为农技员', {
+      type: 'warning',
+      confirmButtonText: '确认',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
+  await changeUserRole(row.id, { role: 'EXPERT' })
+  ElMessage.success('已设为农技员')
+  load()
 }
 
 async function onRole(row) {
-  const { value } = await ElMessageBox.prompt('输入角色 FARMER/EXPERT/ADMIN', '调整身份', {
+  const { value } = await ElMessageBox.prompt('输入角色 FARMER / EXPERT', '调整身份', {
     inputValue: row.role
   }).catch(() => ({ value: null }))
-  if (!value) return
+  if (!value || value === 'ADMIN') {
+    if (value === 'ADMIN') ElMessage.warning('请勿在此将用户设为管理员')
+    return
+  }
   await changeUserRole(row.id, { role: value })
   ElMessage.success('已更新')
   load()
 }
 
-async function onReset(row) {
+async function onResetPwd(row) {
   await resetUserPassword(row.id, { newPassword: 'Reset@123' })
   ElMessage.success('密码已重置为 Reset@123')
 }
@@ -83,5 +182,44 @@ onMounted(load)
 </script>
 
 <style scoped>
-.toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.admin-page {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.page-tabs :deep(.el-tabs__header) {
+  margin-bottom: 12px;
+}
+.table-container {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+  padding: 20px 20px 12px;
+}
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+  align-items: center;
+  justify-content: flex-start;
+}
+.filter-input {
+  width: 260px;
+}
+.data-table {
+  width: 100%;
+}
+.cert-wrap {
+  width: 100%;
+}
+.cert-wrap :deep(.admin-page.embedded) {
+  max-width: none;
+  width: 100%;
+}
+.cert-wrap :deep(.table-container) {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+  padding: 20px 20px 12px;
+}
 </style>

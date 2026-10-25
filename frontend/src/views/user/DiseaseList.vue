@@ -93,7 +93,7 @@
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { cropList, diseaseDetail, diseaseList } from '@/api/content'
-import { fillDiseaseList, normalizeDisease, MOCK_DISEASES } from '@/utils/diseaseCatalog'
+import { mapDiseaseList, normalizeDisease } from '@/utils/diseaseCatalog'
 
 const crops = ref([])
 const cropId = ref(null)
@@ -111,22 +111,15 @@ async function load() {
       size: 24,
       pageSize: 24
     })
-    const records = res.data?.records || []
-    list.value = fillDiseaseList(records, 6)
+    list.value = mapDiseaseList(res.data?.records || [])
   } catch {
-    list.value = fillDiseaseList([], 6)
+    list.value = []
   } finally {
     loading.value = false
   }
 }
 
 async function open(d) {
-  // Mock 条目直接展示本地完整资料
-  if (String(d.id).startsWith('mock-')) {
-    current.value = normalizeDisease(d)
-    visible.value = true
-    return
-  }
   try {
     const res = await diseaseDetail(d.id)
     current.value = normalizeDisease(res.data || d)
@@ -134,9 +127,7 @@ async function open(d) {
   } catch {
     current.value = normalizeDisease(d)
     visible.value = true
-    if (!MOCK_DISEASES.some((m) => m.name === d.name)) {
-      ElMessage.warning('详情接口暂不可用，已展示本地补充资料')
-    }
+    ElMessage.warning('详情加载失败，已展示列表中的资料')
   }
 }
 
@@ -184,12 +175,14 @@ onMounted(async () => {
 .grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  gap: 24px;
+  align-items: stretch;
 }
 
 .disease-card {
   display: flex;
   flex-direction: column;
+  height: 100%;
   background: #fff;
   border: 1px solid #eef2f0;
   border-radius: 16px;
@@ -206,31 +199,35 @@ onMounted(async () => {
 .skeleton-card {
   padding: 16px;
   cursor: default;
+  min-height: 320px;
 }
 .skeleton-card:hover {
   transform: none;
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
 }
 
+/* 固定图片容器：宽满卡片、高 220px，裁切多余部分 */
 .thumb-wrap {
   width: 100%;
-  height: 148px;
-  background: #eef2f0;
+  height: 220px;
+  flex-shrink: 0;
+  background-color: #f7f8fa;
   overflow: hidden;
 }
 .thumb {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   display: block;
 }
 
 .meta {
+  flex: 1;
   padding: 14px 16px 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-height: 108px;
 }
 .meta h3 {
   margin: 0;
@@ -247,10 +244,13 @@ onMounted(async () => {
   color: #6b7280;
   font-size: 0.84rem;
   line-height: 1.55;
+  /* 固定两行描述，保证同行卡片文字区等高 */
+  height: calc(1.55em * 2);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .drawer-body {
@@ -277,14 +277,17 @@ onMounted(async () => {
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
 }
 .hero-cover {
-  height: 220px;
   flex-shrink: 0;
-  background: #eef2f0;
+  width: 100%;
+  height: 220px;
+  background-color: #f7f8fa;
+  overflow: hidden;
 }
 .hero-cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   display: block;
 }
 .drawer-content {

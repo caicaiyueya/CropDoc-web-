@@ -4,6 +4,11 @@ export function dashboardStats() {
   return request.get('/admin/dashboard/stats')
 }
 
+/** 补齐与用户端一致的演示数据（病害 / 资讯 / 社区帖） */
+export function syncDemoContent() {
+  return request.post('/admin/demo/sync')
+}
+
 export function adminUserList(params) {
   return request.get('/admin/user/list', { params })
 }
@@ -26,6 +31,11 @@ export function enableUser(id) {
 
 export function pendingPosts(params) {
   return request.get('/admin/post/pending', { params })
+}
+
+/** 管理员帖子列表；params.status 可选 PENDING/APPROVED/REJECTED/OFFLINE */
+export function adminPostList(params) {
+  return request.get('/admin/post/list', { params })
 }
 
 export function approvePost(id) {

@@ -26,8 +26,12 @@
             class="post-card card-soft"
             @click="$router.push(`/user/post/${p.id}`)"
           >
-            <div v-if="p.cover" class="cover">
-              <img :src="p.cover" :alt="p.title" />
+            <div class="cover">
+              <img
+                :src="p.cover || PLACEHOLDER_COVER"
+                :alt="p.title"
+                @error="onCoverError"
+              />
             </div>
             <div class="body">
               <div class="title-row">
@@ -98,11 +102,10 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { postList } from '@/api/post'
-import { SEED_ACTIVE_USERS, SEED_POSTS } from '@/mock/communitySeed'
 import { unpackPostImages, categoryLabel } from '@/utils/postMedia'
 
 const router = useRouter()
@@ -110,8 +113,49 @@ const list = ref([])
 const sort = ref('time')
 const loading = ref(false)
 
+/** 帖子封面兜底图 */
+const PLACEHOLDER_COVER = '/images/hero-farm.jpg'
+
+/** 按标题关键词补全封面（展示层，不伪造帖子） */
+const COVER_BY_TITLE = [
+  { keys: ['稻瘟病'], cover: '/images/community/rice-blast.png' },
+  { keys: ['玉米', '锈'], cover: '/images/community/corn-rust.png' },
+  { keys: ['赤霉病'], cover: '/images/community/wheat-fusarium.png' },
+  { keys: ['番茄', '晚疫'], cover: '/images/community/tomato-late-blight.png' }
+]
+
 const hotTopics = ['稻瘟病防治', '玉米锈病', '棚室降湿', '科学用药', '有机种植']
-const activeUsers = SEED_ACTIVE_USERS
+
+/** 侧栏活跃农友：由当前列表作者推导 */
+const activeUsers = computed(() => {
+  const seen = new Set()
+  const rows = []
+  for (const p of list.value) {
+    const name = p.authorName || ''
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    rows.push({
+      name,
+      role: p.authorRole === 'EXPERT' ? '认证农技员' : '农户'
+    })
+    if (rows.length >= 6) break
+  }
+  return rows
+})
+
+function resolvePostCover(title, url) {
+  const t = title || ''
+  const matched = COVER_BY_TITLE.find((r) => r.keys.every((k) => t.includes(k)))
+  if (matched) return matched.cover
+  if (url && !url.includes('hero-farm')) return url
+  return url || PLACEHOLDER_COVER
+}
+
+function onCoverError(e) {
+  if (e?.target && e.target.src !== PLACEHOLDER_COVER) {
+    e.target.src = PLACEHOLDER_COVER
+  }
+}
 
 function formatTime(t) {
   if (!t) return '—'
@@ -146,21 +190,11 @@ function mapPost(p) {
   const raw = (p.content || '').replace(/^\s*<!--\w+-->\s*/, '')
   return {
     ...p,
-    cover: urls[0] || '',
+    cover: resolvePostCover(p.title, urls[0] || ''),
     summary: raw.slice(0, 72) || '点击查看完整内容',
     authorName: p.authorName || p.nickname || `农友${p.authorId || ''}`,
     displayTags: tags
   }
-}
-
-function seedFallback() {
-  const rows = [...SEED_POSTS]
-  if (sort.value === 'hot') {
-    rows.sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0))
-  } else {
-    rows.sort((a, b) => String(b.createTime).localeCompare(String(a.createTime)))
-  }
-  return rows.map(mapPost)
 }
 
 async function load() {
@@ -168,9 +202,9 @@ async function load() {
   try {
     const res = await postList({ page: 1, size: 20, sort: sort.value })
     const records = res.data?.records || []
-    list.value = records.length ? records.map(mapPost) : seedFallback()
+    list.value = records.map(mapPost)
   } catch {
-    list.value = seedFallback()
+    list.value = []
   } finally {
     loading.value = false
   }
@@ -285,11 +319,12 @@ onMounted(load)
   box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
 }
 
+/* 帖子封面：固定 160×120，圆角 8px，cover 裁切不变形 */
 .cover {
-  width: 120px;
-  height: 96px;
+  width: 160px;
+  height: 120px;
   flex-shrink: 0;
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
   background: #eef2f0;
 }
@@ -297,6 +332,7 @@ onMounted(load)
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   display: block;
 }
 
@@ -439,6 +475,12 @@ onMounted(load)
   }
   .side-col {
     position: static;
+  }
+}
+@media (max-width: 600px) {
+  .cover {
+    width: 112px;
+    height: 84px;
   }
 }
 </style>

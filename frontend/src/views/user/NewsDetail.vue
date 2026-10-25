@@ -4,9 +4,14 @@
       <div v-if="news.cover" class="cover">
         <img :src="news.cover" :alt="news.title" />
       </div>
-      <h2>{{ news.title }}</h2>
+      <h1 class="title">{{ news.title }}</h1>
       <div class="meta">{{ formatTime(news.createTime) }}</div>
-      <p class="content">{{ news.content }}</p>
+      <div class="content">{{ news.content }}</div>
+
+      <div class="actions">
+        <el-button @click="goBack">返回列表</el-button>
+        <el-button type="primary" plain @click="onShare">分享</el-button>
+      </div>
     </template>
     <el-empty v-else-if="!loading" description="资讯不存在或已下线" />
   </div>
@@ -14,11 +19,13 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { newsDetail } from '@/api/content'
-import { MOCK_NEWS } from '@/utils/newsMock'
+import { resolveNewsCoverByTitle } from '@/utils/newsMock'
 
 const route = useRoute()
+const router = useRouter()
 const news = ref(null)
 const loading = ref(false)
 
@@ -27,30 +34,36 @@ function formatTime(t) {
   return String(t).replace('T', ' ').slice(0, 16)
 }
 
+function goBack() {
+  router.push('/user/news')
+}
+
+async function onShare() {
+  const url = window.location.href
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url)
+      ElMessage.success('链接已复制，可分享给好友')
+    } else {
+      ElMessage.info(url)
+    }
+  } catch {
+    ElMessage.info(url)
+  }
+}
+
 onMounted(async () => {
   const id = route.params.id
-  // Mock 详情：由列表 query 带入，或按 mock id 查找
-  if (id === 'mock' || String(id).startsWith('mock-')) {
-    if (route.query.title) {
-      news.value = {
-        title: route.query.title,
-        createTime: route.query.time || '',
-        content: route.query.content || '',
-        cover: '/images/hero-farm.jpg'
-      }
-    } else {
-      news.value = MOCK_NEWS.find((n) => n.id === id) || MOCK_NEWS[0]
-    }
-    return
-  }
-
   loading.value = true
   try {
     const res = await newsDetail(id)
     news.value = res.data
       ? {
           ...res.data,
-          cover: res.data.cover || '/images/hero-farm.jpg'
+          cover:
+            res.data.cover ||
+            resolveNewsCoverByTitle(res.data.title) ||
+            '/images/hero-farm.jpg'
         }
       : null
   } catch {
@@ -63,43 +76,73 @@ onMounted(async () => {
 
 <style scoped>
 .page {
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
   background: #fff;
   border-radius: 16px;
-  padding: 24px 28px 36px;
+  padding: 28px 32px 36px;
   border: 1px solid #eef2f0;
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
 }
+
 .cover {
-  margin: -8px -12px 18px;
-  height: 220px;
+  width: 100%;
+  max-height: 400px;
+  height: 360px;
+  margin: 0 0 24px;
   border-radius: 12px;
   overflow: hidden;
-  background: #eef2f0;
+  background: #f7f8fa;
 }
+
 .cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-h2 {
-  margin: 0 0 8px;
+
+.title {
+  margin: 0 0 10px;
   color: #163b1f;
-  font-size: 1.45rem;
+  font-size: 1.65rem;
+  font-weight: 800;
   line-height: 1.35;
 }
+
 .meta {
   color: #9ca3af;
   font-size: 0.85rem;
-  margin-bottom: 1.1rem;
+  margin-bottom: 1.4rem;
 }
+
 .content {
-  margin: 0;
+  margin: 0 0 28px;
   white-space: pre-wrap;
-  line-height: 1.75;
+  line-height: 1.8;
   color: #374151;
-  font-size: 0.98rem;
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f2f1;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 20px 16px 28px;
+  }
+  .cover {
+    height: 220px;
+    max-height: 260px;
+  }
+  .title {
+    font-size: 1.35rem;
+  }
 }
 </style>

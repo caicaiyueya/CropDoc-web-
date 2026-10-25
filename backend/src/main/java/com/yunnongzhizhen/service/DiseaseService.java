@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yunnongzhizhen.common.BusinessException;
 import com.yunnongzhizhen.entity.Disease;
-import com.yunnongzhizhen.entity.enums.DiseaseLevel;
 import com.yunnongzhizhen.mapper.DiseaseMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -13,7 +12,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 
 /**
- * 病害资料：农户与认证农技员可见同一套常见病虫害资料，不再按 BASIC/PRO 区分。
+ * 病害资料：农户与认证农技员可见同一套常见病虫害资料。
  */
 @Service
 @RequiredArgsConstructor
@@ -22,7 +21,7 @@ public class DiseaseService {
     private final DiseaseMapper diseaseMapper;
 
     /**
-     * 用例：病害列表（全量，不按角色过滤层级）。
+     * 用例：病害列表。
      */
     public Page<Disease> listByRole(Long cropId, long page, long size) {
         LambdaQueryWrapper<Disease> qw = new LambdaQueryWrapper<Disease>()
@@ -62,9 +61,6 @@ public class DiseaseService {
     public Disease save(Disease disease) {
         if (!StringUtils.hasText(disease.getName()) || disease.getCropId() == null) {
             throw new BusinessException("作物与病害名称不能为空");
-        }
-        if (disease.getLevel() == null) {
-            disease.setLevel(DiseaseLevel.BASIC);
         }
         LocalDateTime now = LocalDateTime.now();
         if (disease.getId() == null) {

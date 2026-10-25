@@ -184,10 +184,20 @@ public class PostService {
      * 管理员：待审核帖子。
      */
     public Page<Post> pendingPosts(long page, long size) {
-        Page<Post> result = postMapper.selectPage(new Page<>(page, size),
-                new LambdaQueryWrapper<Post>()
-                        .eq(Post::getStatus, PostStatus.PENDING)
-                        .orderByAsc(Post::getCreateTime));
+        return adminListPosts(PostStatus.PENDING, page, size);
+    }
+
+    /**
+     * 管理员：帖子列表（可选按状态筛选；空则返回全部，与用户端社区同源）。
+     */
+    public Page<Post> adminListPosts(PostStatus status, long page, long size) {
+        LambdaQueryWrapper<Post> qw = new LambdaQueryWrapper<Post>()
+                .orderByDesc(Post::getPinned)
+                .orderByDesc(Post::getCreateTime);
+        if (status != null) {
+            qw.eq(Post::getStatus, status);
+        }
+        Page<Post> result = postMapper.selectPage(new Page<>(page, size), qw);
         fillPostsAuthors(result.getRecords());
         return result;
     }

@@ -24,8 +24,13 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 管理端仪表盘统计。
@@ -62,6 +67,61 @@ public class DashboardService {
                 new LambdaQueryWrapper<CertificationApplication>().eq(CertificationApplication::getStatus, CertStatus.PENDING)));
         map.put("reportPending", reportMapper.selectCount(new LambdaQueryWrapper<Report>().eq(Report::getStatus, ReportStatus.PENDING)));
         map.put("feedbackOpen", feedbackMapper.selectCount(new LambdaQueryWrapper<Feedback>().eq(Feedback::getStatus, FeedbackStatus.OPEN)));
+        map.put("detectionTrend7", detectionTrend(7));
+        map.put("detectionTrend30", detectionTrend(30));
+        map.put("topDiseases", topDiseases(5));
         return map;
+    }
+
+    /** 近 N 天每日识别次数（含当天，按日期升序） */
+    private List<Map<String, Object>> detectionTrend(int days) {
+        LocalDate today = LocalDate.now();
+        LocalDateTime from = LocalDateTime.of(today.minusDays(days - 1L), LocalTime.MIN);
+        List<DetectionRecord> rows = detectionRecordMapper.selectList(
+                new LambdaQueryWrapper<DetectionRecord>()
+                        .ge(DetectionRecord::getCreateTime, from)
+                        .select(DetectionRecord::getCreateTime));
+        Map<LocalDate, Long> counts = new HashMap<>();
+        for (DetectionRecord r : rows) {
+            if (r.getCreateTime() == null) {
+                continue;
+            }
+            LocalDate d = r.getCreateTime().toLocalDate();
+            counts.merge(d, 1L, Long::sum);
+        }
+        List<Map<String, Object>> series = new ArrayList<>(days);
+        for (int i = days - 1; i >= 0; i--) {
+            LocalDate d = today.minusDays(i);
+            Map<String, Object> point = new LinkedHashMap<>();
+            point.put("date", d.toString());
+            point.put("label", d.getMonthValue() + "/" + d.getDayOfMonth());
+            point.put("count", counts.getOrDefault(d, 0L));
+            series.add(point);
+        }
+        return series;
+    }
+
+    /** 识别结果 TOP N（按 result 字段聚合） */
+    private List<Map<String, Object>> topDiseases(int limit) {
+        List<DetectionRecord> rows = detectionRecordMapper.selectList(
+                new LambdaQueryWrapper<DetectionRecord>()
+                        .isNotNull(DetectionRecord::getResult)
+                        .ne(DetectionRecord::getResult, "")
+                        .select(DetectionRecord::getResult));
+        Map<String, Long> counts = rows.stream()
+                .map(DetectionRecord::getResult)
+                .filter(s -> s != null && !s.isBlank())
+                .map(String::trim)
+                .collect(Collectors.groupingBy(s -> s, Collectors.counting()));
+        return counts.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue(Comparator.reverseOrder()))
+                .limit(limit)
+                .map(e -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("name", e.getKey());
+                    item.put("count", e.getValue());
+                    return item;
+                })
+                .collect(Collectors.toList());
     }
 }

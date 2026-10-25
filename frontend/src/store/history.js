@@ -84,16 +84,76 @@ export const useHistoryStore = defineStore('history', () => {
     return record
   }
 
+  /**
+   * 按 id 删除单条记录，并同步 localStorage。
+   * @param {string|number} id
+   * @returns {boolean} 是否删除成功
+   */
+  function removeRecord(id) {
+    const before = records.value.length
+    records.value = records.value.filter((r) => String(r.id) !== String(id))
+    if (records.value.length === before) return false
+    persist(records.value)
+    return true
+  }
+
   /** 清空全部历史并同步 localStorage */
   function clearRecords() {
     records.value = []
     persist(records.value)
   }
 
+  /**
+   * 用后端病害识别记录（含 image_path）合并进本地列表：
+   * - 保留本地 AI 问诊记录
+   * - 按 api-{id} 去重写入识别记录
+   * @param {object[]} apiList DetectionRecord[]
+   * @param {Record<string|number, string>} [cropNameById]
+   */
+  function mergeDetectionApi(apiList, cropNameById = {}) {
+    const formatTime = (t) => {
+      if (!t) return ''
+      return String(t).replace('T', ' ').slice(0, 19)
+    }
+    const resolveImage = (path) => {
+      if (!path) return ''
+      const p = String(path)
+      if (p.startsWith('http') || p.startsWith('/') || p.startsWith('data:')) return p
+      return `/uploads/${p}`
+    }
+
+    const fromApi = (apiList || []).map((r) => ({
+      id: `api-${r.id}`,
+      type: 'DISEASE_DETECT',
+      crop: cropNameById[r.cropId] || cropNameById[String(r.cropId)] || '',
+      diseaseName: r.result || '未知',
+      confidence: Number(r.confidence) || 0,
+      imageUrl: resolveImage(r.imagePath),
+      createTime: formatTime(r.createTime),
+      summary: r.description || '',
+      _fromApi: true
+    }))
+
+    const localKeep = records.value.filter(
+      (r) => r.type === 'AI_CONSULT' || (r.type === 'DISEASE_DETECT' && !String(r.id).startsWith('api-'))
+    )
+    const apiIds = new Set(fromApi.map((r) => r.id))
+    const merged = [
+      ...fromApi,
+      ...localKeep.filter((r) => !apiIds.has(String(r.id)))
+    ].sort((a, b) => String(b.createTime || '').localeCompare(String(a.createTime || '')))
+
+    records.value = merged
+    persist(records.value)
+    return merged
+  }
+
   return {
     records,
     addRecord,
     getRecords,
-    clearRecords
+    removeRecord,
+    clearRecords,
+    mergeDetectionApi
   }
 })

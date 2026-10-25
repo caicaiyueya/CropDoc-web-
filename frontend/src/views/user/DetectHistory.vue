@@ -1,9 +1,9 @@
 <template>
-  <div class="history-page">
+  <div class="history-page" v-loading="loading">
     <header class="page-head">
       <div>
         <h1>我的诊断历史</h1>
-        <p>识病与 AI 问诊记录，本地同步保存</p>
+        <p>识病记录与后端同步，问诊记录保存在本机</p>
       </div>
       <div class="head-actions">
         <el-button
@@ -47,10 +47,13 @@
             {{ formatConfidence(row.confidence) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="110" fixed="right">
+        <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" class="link-detail" @click="openDetail(row)">
               查看详情
+            </el-button>
+            <el-button link type="danger" class="link-del" @click="onDelete(row)">
+              删除
             </el-button>
           </template>
         </el-table-column>
@@ -115,13 +118,33 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useHistoryStore } from '@/store/history'
+import { detectionHistory } from '@/api/detection'
+import { cropList } from '@/api/content'
 
 const historyStore = useHistoryStore()
 const router = useRouter()
 
 const list = computed(() => historyStore.getRecords())
+const loading = ref(false)
 const detailVisible = ref(false)
 const current = ref(null)
+
+async function loadFromServer() {
+  loading.value = true
+  try {
+    const [hRes, cRes] = await Promise.all([
+      detectionHistory({ page: 1, size: 100 }),
+      cropList().catch(() => ({ data: [] }))
+    ])
+    const crops = cRes.data || []
+    const cropNameById = Object.fromEntries(crops.map((c) => [c.id, c.name]))
+    historyStore.mergeDetectionApi(hRes.data?.records || [], cropNameById)
+  } catch {
+    /* 保留本地已有记录 */
+  } finally {
+    loading.value = false
+  }
+}
 
 function typeLabel(type) {
   return type === 'AI_CONSULT' ? '问诊' : '识别'
@@ -154,6 +177,29 @@ function goConsult() {
   })
 }
 
+async function onDelete(row) {
+  if (!row?.id) return
+  try {
+    await ElMessageBox.confirm('删除后不可恢复，确定删除该条记录吗？', '删除确认', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  const ok = historyStore.removeRecord(row.id)
+  if (ok) {
+    if (current.value?.id === row.id) {
+      detailVisible.value = false
+      current.value = null
+    }
+    ElMessage.success('删除成功')
+  } else {
+    ElMessage.error('删除失败，记录不存在')
+  }
+}
+
 async function onClear() {
   try {
     await ElMessageBox.confirm('确定清空全部诊断历史？此操作不可恢复。', '清空确认', {
@@ -169,7 +215,7 @@ async function onClear() {
 }
 
 onMounted(() => {
-  historyStore.getRecords()
+  loadFromServer()
 })
 </script>
 
@@ -239,6 +285,10 @@ onMounted(() => {
 .link-detail {
   --el-button-text-color: #28b446;
   --el-button-hover-text-color: #1f8f36;
+}
+.link-del {
+  --el-button-text-color: #ef4444;
+  --el-button-hover-text-color: #dc2626;
 }
 
 .detail-grid {

@@ -174,6 +174,43 @@ public class CertificationService {
         return adminLogService.listCertificationLogs();
     }
 
+    /**
+     * 管理员直接设为农技员时，补一条「已通过」认证记录（已有则跳过）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void ensureApprovedForExpert(Long userId) {
+        if (userId == null) {
+            return;
+        }
+        Long approved = certificationApplicationMapper.selectCount(
+                new LambdaQueryWrapper<CertificationApplication>()
+                        .eq(CertificationApplication::getUserId, userId)
+                        .eq(CertificationApplication::getStatus, CertStatus.APPROVED));
+        if (approved != null && approved > 0) {
+            return;
+        }
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            return;
+        }
+        Long reviewerId = SecurityUtils.requireUserId();
+        LocalDateTime now = LocalDateTime.now();
+        CertificationApplication app = new CertificationApplication();
+        app.setUserId(userId);
+        app.setQualificationDesc((user.getNickname() != null ? user.getNickname() : user.getUsername())
+                + "：管理员设为农技员，系统补记已通过认证");
+        app.setMaterialPath(null);
+        app.setStatus(CertStatus.APPROVED);
+        app.setReviewerId(reviewerId);
+        app.setReviewComment("管理员直接调整角色为 EXPERT");
+        app.setReviewTime(now);
+        app.setCreateTime(now);
+        app.setUpdateTime(now);
+        certificationApplicationMapper.insert(app);
+        adminLogService.log(reviewerId, userId, "APPROVE_CERTIFICATION",
+                "角色设为EXPERT，补记认证已通过");
+    }
+
     private CertificationApplication requirePending(Long id) {
         CertificationApplication app = certificationApplicationMapper.selectById(id);
         if (app == null) {

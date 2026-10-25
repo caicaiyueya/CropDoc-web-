@@ -3,7 +3,6 @@ package com.yunnongzhizhen.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.yunnongzhizhen.entity.enums.DiseaseLevel;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -31,9 +30,6 @@ public class Disease {
 
     /** 防治建议 */
     private String preventionAdvice;
-
-    /** 资料层级 BASIC/PRO */
-    private DiseaseLevel level;
 
     /** 创建时间 */
     private LocalDateTime createTime;

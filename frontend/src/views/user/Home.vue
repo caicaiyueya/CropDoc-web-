@@ -32,9 +32,9 @@
             <div class="thumb-wrap">
               <img
                 class="thumb"
-                :src="d.cover"
+                :src="d.cover || DISEASE_PLACEHOLDER"
                 :alt="d.title"
-                :style="{ objectPosition: d.pos }"
+                @error="onDiseaseImgError"
               />
             </div>
             <div class="meta">
@@ -87,52 +87,43 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { diseaseList, newsList } from '@/api/content'
+import { resolveNewsCoverByTitle } from '@/utils/newsMock'
+import { resolveStandardDiseaseImage } from '@/utils/diseaseCatalog'
 
-const FARM = '/images/hero-farm.jpg'
+const DISEASE_PLACEHOLDER = '/images/hero-farm.jpg'
 const POS = ['18% 40%', '72% 35%', '45% 70%', '30% 20%']
 
-const FALLBACK_DISEASES = [
-  {
-    title: '稻瘟病',
-    desc: '叶片出现梭形灰绿色病斑，高温高湿条件下扩展迅速，严重影响结实。',
-    cover: FARM,
-    pos: POS[0]
-  },
-  {
-    title: '玉米锈病',
-    desc: '叶面散生橙黄色夏孢子堆，后期表皮破裂，光合效率明显下降。',
-    cover: FARM,
-    pos: POS[1]
-  },
-  {
-    title: '小麦赤霉病',
-    desc: '穗部粉红霉层，籽粒皱缩且可能含毒素，收获前需重点监测。',
-    cover: FARM,
-    pos: POS[2]
-  }
-]
-
 const news = ref([])
-const diseases = ref([...FALLBACK_DISEASES])
+const diseases = ref([])
 
 function formatTime(t) {
   if (!t) return '今日'
   return String(t).replace('T', ' ').slice(0, 16)
 }
 
-/** 保证左侧至少 3 张卡片，与右侧资讯栏高度大致对齐 */
-function fillDiseases(apiList) {
-  const mapped = (apiList || []).map((d, i) => ({
+function onDiseaseImgError(e) {
+  const el = e?.target
+  if (el && el.src && !el.src.includes('hero-farm')) {
+    el.src = DISEASE_PLACEHOLDER
+  }
+}
+
+function mapDiseases(apiList) {
+  return (apiList || []).slice(0, 3).map((d, i) => ({
     id: d.id,
     title: d.name,
-    desc: (d.description || '点击查看症状特征与防治建议').slice(0, 48),
-    cover: FARM,
+    desc: String(d.description || '点击查看症状特征与防治建议')
+      .replace(/【[^】]+】/g, '')
+      .trim()
+      .slice(0, 48),
+    cover:
+      d.image_url ||
+      d.imageUrl ||
+      d.cover ||
+      resolveStandardDiseaseImage({ name: d.name }) ||
+      DISEASE_PLACEHOLDER,
     pos: POS[i % POS.length]
   }))
-  if (mapped.length >= 3) return mapped.slice(0, 3)
-  const titles = new Set(mapped.map((d) => d.title))
-  const pad = FALLBACK_DISEASES.filter((d) => !titles.has(d.title))
-  return [...mapped, ...pad].slice(0, 3)
 }
 
 onMounted(async () => {
@@ -144,25 +135,13 @@ onMounted(async () => {
     const apiNews = nRes.data?.records || []
     news.value = apiNews.map((n, i) => ({
       ...n,
-      cover: n.cover || null,
+      cover: n.cover || resolveNewsCoverByTitle(n.title) || null,
       _pos: POS[i % POS.length]
     }))
-    diseases.value = fillDiseases(dRes.data?.records || [])
-    if (!news.value.length) {
-      news.value = [
-        { title: '春季田间管理要点：控水控肥防病害', createTime: '2026-10-24 08:30', cover: null },
-        { title: '南方稻区注意稻瘟病早期监测', createTime: '2026-10-24 07:50', cover: null },
-        { title: '智能识别如何辅助基层农技服务', createTime: '2026-10-23 18:20', cover: null },
-        { title: '农技员认证通道已开放申请', createTime: '2026-10-23 15:10', cover: null }
-      ]
-    }
+    diseases.value = mapDiseases(dRes.data?.records || [])
   } catch {
-    diseases.value = [...FALLBACK_DISEASES]
-    news.value = [
-      { title: '春季田间管理要点：控水控肥防病害', createTime: '2026-10-24 08:30', cover: null },
-      { title: '南方稻区注意稻瘟病早期监测', createTime: '2026-10-24 07:50', cover: null },
-      { title: '智能识别如何辅助基层农技服务', createTime: '2026-10-23 18:20', cover: null }
-    ]
+    news.value = []
+    diseases.value = []
   }
 })
 </script>
@@ -277,7 +256,7 @@ onMounted(async () => {
   text-decoration-color: #28b446;
 }
 
-/* 上下三张横向图文卡，与右侧资讯栏高度对齐 */
+/* 上下三张横向图文卡：左侧固定尺寸封面，与资讯缩略图视觉对齐 */
 .disease-grid {
   display: flex;
   flex-direction: column;
@@ -286,7 +265,7 @@ onMounted(async () => {
 }
 .disease-card {
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
   gap: 14px;
   padding: 12px;
   border: 1px solid #eef2f0;
@@ -302,18 +281,18 @@ onMounted(async () => {
   transform: translateY(-1px);
 }
 .thumb-wrap {
-  width: 88px;
-  height: 88px;
+  width: 140px;
+  height: 100px;
   flex-shrink: 0;
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
-  background: #eef2f0;
-  align-self: center;
+  background: #e8f5eb;
 }
 .thumb {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   display: block;
 }
 .meta {
@@ -322,13 +301,17 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding-right: 4px;
+  padding: 2px 4px 2px 0;
+  align-self: stretch;
 }
 .meta h4 {
   margin: 0 0 8px;
   font-size: 1rem;
   color: #1f2937;
   font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .meta p {
   margin: 0;
@@ -356,14 +339,14 @@ onMounted(async () => {
 }
 .news-item:hover { background: #f4faf6; }
 .news-thumb {
-  width: 52px;
-  height: 52px;
-  border-radius: 10px;
+  width: 100px;
+  height: 70px;
+  border-radius: 8px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
   background: #f3f4f6;
-  border: 1.5px solid #d1d5db;
+  border: 1px solid #e5e7eb;
   color: #4b5563;
   overflow: hidden;
 }
@@ -371,10 +354,11 @@ onMounted(async () => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 .cal-icon {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
 }
 .news-body {
   flex: 1;

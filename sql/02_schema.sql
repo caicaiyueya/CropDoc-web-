@@ -70,12 +70,10 @@ CREATE TABLE `disease` (
     `name`              VARCHAR(128) NOT NULL COMMENT '病害名称',
     `description`       TEXT         COMMENT '描述',
     `prevention_advice` TEXT         COMMENT '防治建议',
-    `level`             VARCHAR(16)  NOT NULL DEFAULT 'BASIC' COMMENT '资料层级：BASIC/PRO',
     `create_time`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    KEY `idx_disease_crop` (`crop_id`),
-    KEY `idx_disease_level` (`level`)
+    KEY `idx_disease_crop` (`crop_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='病害资料';
 
 -- ----------------------------

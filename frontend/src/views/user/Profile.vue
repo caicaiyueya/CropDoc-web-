@@ -192,8 +192,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { createFeedback, getProfile, noticeList, updateProfile } from '@/api/content'
-import { uploadFile } from '@/api/detection'
+import { createFeedback, cropList, getProfile, noticeList, updateProfile } from '@/api/content'
+import { detectionHistory, uploadFile } from '@/api/detection'
 import { useHistoryStore } from '@/store/history'
 import { useUserStore } from '@/store/user'
 
@@ -302,6 +302,17 @@ onMounted(async () => {
     Object.assign(form, res.data || {})
   } catch {
     ElMessage.error('加载个人资料失败')
+  }
+  // 拉取后端识别历史（含 image_path），供「最近诊断」展示
+  try {
+    const [hRes, cRes] = await Promise.all([
+      detectionHistory({ page: 1, size: 20 }),
+      cropList().catch(() => ({ data: [] }))
+    ])
+    const cropNameById = Object.fromEntries((cRes.data || []).map((c) => [c.id, c.name]))
+    historyStore.mergeDetectionApi(hRes.data?.records || [], cropNameById)
+  } catch {
+    /* 保留本地 */
   }
 })
 

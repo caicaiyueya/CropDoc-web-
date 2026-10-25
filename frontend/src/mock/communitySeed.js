@@ -13,8 +13,11 @@ export const SEED_USERS = [
   { id: 107, username: 'expert_zhao', nickname: '赵专家', role: 'EXPERT', region: '省植保站' }
 ]
 
-/** 封面统一用站内图（与 DataInitializer images 字段一致：category||url） */
-const COVER = '/images/hero-farm.jpg'
+/** 帖子封面（与 DataInitializer images 字段一致：category||url） */
+const COVER_RICE_BLAST = '/images/community/rice-blast.png'
+const COVER_CORN_RUST = '/images/community/corn-rust.png'
+const COVER_WHEAT_FUSARIUM = '/images/community/wheat-fusarium.png'
+const COVER_TOMATO_BLIGHT = '/images/community/tomato-late-blight.png'
 
 export const SEED_POSTS = [
   {
@@ -30,7 +33,7 @@ export const SEED_POSTS = [
     pinned: true,
     viewCount: 328,
     createTime: '2026-03-18 09:20:00',
-    images: [`experience||${COVER}`]
+    images: [`experience||${COVER_RICE_BLAST}`]
   },
   {
     id: 1002,
@@ -45,7 +48,7 @@ export const SEED_POSTS = [
     pinned: false,
     viewCount: 156,
     createTime: '2026-03-20 14:05:00',
-    images: [`help||${COVER}`]
+    images: [`help||${COVER_CORN_RUST}`]
   },
   {
     id: 1003,
@@ -60,7 +63,7 @@ export const SEED_POSTS = [
     pinned: false,
     viewCount: 210,
     createTime: '2026-03-22 08:40:00',
-    images: [`experience||${COVER}`]
+    images: [`experience||${COVER_WHEAT_FUSARIUM}`]
   },
   {
     id: 1004,
@@ -74,7 +77,7 @@ export const SEED_POSTS = [
     pinned: false,
     viewCount: 275,
     createTime: '2026-03-24 16:30:00',
-    images: [`experience||${COVER}`]
+    images: [`experience||${COVER_TOMATO_BLIGHT}`]
   }
 ]
 

@@ -55,7 +55,6 @@ CREATE TABLE disease (
     name VARCHAR(128) NOT NULL,
     description CLOB,
     prevention_advice CLOB,
-    level VARCHAR(16) NOT NULL DEFAULT 'BASIC',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

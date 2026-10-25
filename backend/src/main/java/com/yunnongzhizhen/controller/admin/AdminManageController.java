@@ -2,6 +2,7 @@ package com.yunnongzhizhen.controller.admin;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yunnongzhizhen.common.ApiResult;
+import com.yunnongzhizhen.config.DataInitializer;
 import com.yunnongzhizhen.dto.user.UserInfoVO;
 import com.yunnongzhizhen.entity.Banner;
 import com.yunnongzhizhen.entity.Crop;
@@ -51,10 +52,20 @@ public class AdminManageController {
     private final NewsService newsService;
     private final DiseaseService diseaseService;
     private final CropService cropService;
+    private final DataInitializer dataInitializer;
 
     @GetMapping("/dashboard/stats")
     public ApiResult<Map<String, Object>> stats() {
         return ApiResult.ok(dashboardService.stats());
+    }
+
+    /**
+     * 补齐与用户端一致的演示数据（病害库 / 资讯 / 社区帖）。
+     */
+    @PostMapping("/demo/sync")
+    public ApiResult<Void> syncDemoContent() {
+        dataInitializer.syncDemoContent();
+        return ApiResult.okMessage("演示数据已与用户端对齐");
     }
 
     @GetMapping("/user/list")

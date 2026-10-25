@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yunnongzhizhen.common.ApiResult;
 import com.yunnongzhizhen.entity.Post;
 import com.yunnongzhizhen.entity.Report;
+import com.yunnongzhizhen.entity.enums.PostStatus;
 import com.yunnongzhizhen.entity.enums.ReportStatus;
 import com.yunnongzhizhen.service.PostService;
 import com.yunnongzhizhen.service.ReportService;
@@ -35,6 +36,15 @@ public class AdminPostController {
             @RequestParam(defaultValue = "1") long page,
             @RequestParam(defaultValue = "10") long size) {
         return ApiResult.ok(postService.pendingPosts(page, size));
+    }
+
+    /** 管理员帖子列表：status 为空返回全部（与用户端社区同源数据） */
+    @GetMapping("/post/list")
+    public ApiResult<Page<Post>> list(
+            @RequestParam(required = false) PostStatus status,
+            @RequestParam(defaultValue = "1") long page,
+            @RequestParam(defaultValue = "50") long size) {
+        return ApiResult.ok(postService.adminListPosts(status, page, size));
     }
 
     @PostMapping("/post/{id}/approve")

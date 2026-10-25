@@ -177,6 +177,7 @@ import { ElMessage } from 'element-plus'
 import { Camera, Check, Search } from '@element-plus/icons-vue'
 import { cropList } from '@/api/content'
 import { detectDisease, uploadFile } from '@/api/detection'
+import { useHistoryStore } from '@/store/history'
 
 /** 设计稿分组：粮食 / 经济 */
 const CROP_GROUPS = [
@@ -187,6 +188,7 @@ const CROP_GROUPS = [
 const MAX_UPLOADS = 3
 
 const router = useRouter()
+const historyStore = useHistoryStore()
 const apiCrops = ref([])
 const cropQuery = ref('')
 const selectedCrop = ref('')
@@ -347,6 +349,16 @@ async function onDetect() {
     }
     resultData.value = payload
     sessionStorage.setItem('ynzz_last_detect', JSON.stringify(payload))
+    // 同步写入本地历史；后端 detection_record 已由接口落库（含 image_path）
+    historyStore.addRecord({
+      id: payload.id != null ? `api-${payload.id}` : undefined,
+      type: 'DISEASE_DETECT',
+      crop: payload.cropName || '',
+      diseaseName: payload.result || payload.diseaseName || '',
+      confidence: Number(payload.confidence) || 0,
+      imageUrl: payload.previewUrl || payload.imagePath || '',
+      summary: payload.description || ''
+    })
     panelStatus.value = 'success'
     ElMessage.success('识别完成')
   } catch {

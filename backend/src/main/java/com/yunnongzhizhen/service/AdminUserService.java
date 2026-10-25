@@ -27,6 +27,7 @@ public class AdminUserService {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final AdminLogService adminLogService;
+    private final CertificationService certificationService;
 
     public Page<UserInfoVO> listUsers(String keyword, UserRole role, UserStatus status, long page, long size) {
         LambdaQueryWrapper<User> qw = new LambdaQueryWrapper<User>().orderByDesc(User::getCreateTime);
@@ -58,7 +59,7 @@ public class AdminUserService {
     }
 
     /**
-     * 调整角色。
+     * 调整角色；设为 EXPERT 时同步写入认证审核「已通过」记录。
      */
     public void changeRole(Long userId, UserRole role) {
         if (role == null) {
@@ -71,6 +72,9 @@ public class AdminUserService {
         userMapper.updateById(user);
         adminLogService.log(SecurityUtils.requireUserId(), userId, "CHANGE_ROLE",
                 "角色 " + old + " → " + role);
+        if (role == UserRole.EXPERT) {
+            certificationService.ensureApprovedForExpert(userId);
+        }
     }
 
     public void disable(Long userId) {

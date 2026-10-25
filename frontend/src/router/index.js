@@ -2,8 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/store/user'
 
 /**
- * 路由：用户端 /user/**，管理员端 /admin/**，/login、/register。
- * 守卫：未登录 → /login；/admin/** 仅 ADMIN；按 role 动态菜单在布局中处理。
+ * 路由：用户端 /login + /user/**；管理员端 /admin/login + /admin/**。
+ * 守卫：后台未登录 → /admin/login；用户端未登录 → /login。
  */
 const routes = [
   {
@@ -17,6 +17,12 @@ const routes = [
     name: 'Register',
     component: () => import('@/views/Register.vue'),
     meta: { public: true, title: '注册' }
+  },
+  {
+    path: '/admin/login',
+    name: 'AdminLogin',
+    component: () => import('@/views/admin/AdminLogin.vue'),
+    meta: { public: true, adminLogin: true, title: '管理员登录' }
   },
   {
     path: '/',
@@ -47,8 +53,6 @@ const routes = [
       { path: 'community/post', name: 'CommunityPostCreate', component: () => import('@/views/user/PostCreate.vue'), meta: { title: '发帖' } },
       { path: 'post/:id', name: 'PostDetail', component: () => import('@/views/user/PostDetail.vue'), meta: { title: '帖子详情' } },
       { path: 'post-create', name: 'PostCreate', component: () => import('@/views/user/PostCreate.vue'), meta: { title: '发帖' } },
-      // 个人中心已移除「我的收藏」入口；收藏 API 仍保留供后端/管理端使用
-      // { path: 'favorites', name: 'Favorites', component: () => import('@/views/user/Favorites.vue'), meta: { title: '我的收藏' } },
       { path: 'profile', name: 'Profile', component: () => import('@/views/user/Profile.vue'), meta: { title: '个人中心' } },
       { path: 'certification', name: 'CertificationApply', component: () => import('@/views/user/CertificationApply.vue'), meta: { title: '认证申请', farmerOnly: true } },
       { path: 'news', name: 'NewsList', component: () => import('@/views/user/NewsList.vue'), meta: { title: '资讯' } },
@@ -62,15 +66,51 @@ const routes = [
     meta: { requiresAuth: true, requiresAdmin: true },
     children: [
       { path: '', redirect: '/admin/dashboard' },
-      { path: 'dashboard', name: 'AdminDashboard', component: () => import('@/views/admin/Dashboard.vue'), meta: { title: '工作台' } },
-      { path: 'certification', name: 'CertificationReview', component: () => import('@/views/admin/CertificationReview.vue'), meta: { title: '认证审核' } },
-      { path: 'posts', name: 'PostReview', component: () => import('@/views/admin/PostReview.vue'), meta: { title: '帖子审核' } },
-      { path: 'reports', name: 'ReportManage', component: () => import('@/views/admin/ReportManage.vue'), meta: { title: '举报处理' } },
-      { path: 'users', name: 'UserManage', component: () => import('@/views/admin/UserManage.vue'), meta: { title: '用户管理' } },
-      { path: 'news', name: 'NewsManage', component: () => import('@/views/admin/NewsManage.vue'), meta: { title: '资讯管理' } },
-      { path: 'disease', name: 'DiseaseManage', component: () => import('@/views/admin/DiseaseManage.vue'), meta: { title: '病害库管理' } },
-      { path: 'banner', name: 'BannerNotice', component: () => import('@/views/admin/BannerNotice.vue'), meta: { title: 'Banner/公告' } },
-      { path: 'feedback', name: 'FeedbackManage', component: () => import('@/views/admin/FeedbackManage.vue'), meta: { title: '反馈处理' } }
+      {
+        path: 'dashboard',
+        name: 'AdminDashboard',
+        component: () => import('@/views/admin/Dashboard.vue'),
+        meta: { title: '控制台' }
+      },
+      {
+        path: 'users',
+        name: 'UserManage',
+        component: () => import('@/views/admin/UserManage.vue'),
+        meta: { title: '用户管理', parent: '用户与权限' }
+      },
+      {
+        path: 'certification',
+        name: 'CertificationReview',
+        component: () => import('@/views/admin/CertificationReview.vue'),
+        meta: { title: '认证审核', parent: '用户与权限' }
+      },
+      {
+        path: 'posts',
+        name: 'PostReview',
+        component: () => import('@/views/admin/PostReview.vue'),
+        meta: { title: '帖子审核', parent: '社区管理' }
+      },
+      {
+        path: 'disease',
+        name: 'DiseaseManage',
+        component: () => import('@/views/admin/DiseaseManage.vue'),
+        meta: { title: '病害库管理', parent: '资讯管理' }
+      },
+      {
+        path: 'news',
+        name: 'NewsManage',
+        component: () => import('@/views/admin/NewsManage.vue'),
+        meta: { title: '资讯管理', parent: '资讯管理' }
+      },
+      // Banner/公告已下线；旧路径重定向
+      { path: 'site', redirect: '/admin/news' },
+      { path: 'banner', redirect: '/admin/news' },
+      {
+        path: 'feedback',
+        name: 'FeedbackManage',
+        component: () => import('@/views/admin/FeedbackManage.vue'),
+        meta: { title: '反馈处理' }
+      }
     ]
   },
   { path: '/:pathMatch(.*)*', redirect: '/user/home' }
@@ -82,23 +122,42 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 })
 })
 
+function isAdminPath(path) {
+  return path === '/admin' || path.startsWith('/admin/')
+}
+
 router.beforeEach((to, from, next) => {
   const store = useUserStore()
   document.title = to.meta.title ? `${to.meta.title} - 云农智诊` : '云农智诊'
 
   if (to.meta.public) {
-    if (store.isLogin && (to.path === '/login' || to.path === '/register')) {
-      return next(store.isAdmin ? '/admin/dashboard' : '/user/home')
+    if (store.isLogin) {
+      // 仅已登录的管理员访问后台登录页时跳过；普通用户可停留以便切换账号
+      if (to.meta.adminLogin) {
+        return store.isAdmin ? next('/admin/dashboard') : next()
+      }
+      if (to.path === '/login' || to.path === '/register') {
+        // 管理员访问用户登录页时引导回后台；普通用户已登录则进首页
+        if (store.isAdmin) return next('/admin/dashboard')
+        return next('/user/home')
+      }
     }
     return next()
   }
 
   if (!store.isLogin) {
+    if (isAdminPath(to.path)) {
+      return next({ path: '/admin/login', query: { redirect: to.fullPath } })
+    }
     return next({ path: '/login', query: { redirect: to.fullPath } })
   }
 
   if (to.meta.requiresAdmin && !store.isAdmin) {
     return next('/user/home')
+  }
+
+  if (store.isAdmin && to.path.startsWith('/user')) {
+    // 管理员可进用户端浏览，不强制拦截
   }
 
   if (to.meta.farmerOnly && !store.isFarmer) {
