@@ -1,4 +1,5 @@
 <template>
+  <!-- 视口锁高：左/中/右各自内部滚动，禁止撑开全局页面 -->
   <div class="ai-page">
     <header class="page-title">
       <h1>AI 智能问诊</h1>
@@ -6,8 +7,8 @@
     </header>
 
     <div class="tri-layout">
-      <!-- 左：会话历史 -->
-      <aside class="col col-left card">
+      <!-- 左：会话历史（栏内独立滚动） -->
+      <aside class="col col-left card thin-scroll">
         <el-button type="primary" class="btn-new" :icon="Plus" @click="createSession">
           新建对话
         </el-button>
@@ -36,7 +37,7 @@
         </div>
       </aside>
 
-      <!-- 中：聊天窗口 -->
+      <!-- 中：聊天窗口（消息区滚动 + 输入框吸底） -->
       <section class="col col-center card">
         <div class="chat-head">
           <img class="ai-logo" src="/images/logo.png" alt="AI" />
@@ -46,7 +47,7 @@
           </div>
         </div>
 
-        <div ref="listRef" class="chat-list">
+        <div ref="listRef" class="chat-list thin-scroll">
           <div v-if="!messages.length && !loading" class="welcome">
             <p>你好，我是云农智诊智能助手。</p>
             <p>可从识别页跳转自动生成防治建议，或直接输入农技问题。</p>
@@ -96,8 +97,8 @@
         </div>
       </section>
 
-      <!-- 右：上下文面板 -->
-      <aside class="col col-right card">
+      <!-- 右：诊断 / 快捷提问（栏内独立滚动） -->
+      <aside class="col col-right card thin-scroll">
         <template v-if="hasDetectMeta">
           <h3>智能诊断结果</h3>
           <p class="side-sub">{{ detectMeta.result }}</p>
@@ -152,10 +153,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import { diagnosisChat } from '@/api/detection'
 import { useHistoryStore } from '@/store/history'
+import { useUserStore } from '@/store/user'
+import { aiChatStorageKey, migrateLegacyAiChat } from '@/utils/userScopedCache'
 import { getCauseTips, getPreventionTips } from '@/utils/diseaseMap'
 import { renderMarkdown } from '@/utils/markdown'
 
-const STORAGE_KEY = 'ynzz_ai_chat_sessions_v1'
 const SUGGEST_QUESTIONS = [
   '玉米叶子发黄怎么办？',
   '常见叶斑病如何防治？',
@@ -166,6 +168,7 @@ const SUGGEST_QUESTIONS = [
 
 const route = useRoute()
 const historyStore = useHistoryStore()
+const userStore = useUserStore()
 
 const question = ref('')
 const loading = ref(false)
@@ -232,9 +235,19 @@ function uid() {
   return `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+function currentChatKey() {
+  return aiChatStorageKey(userStore.userInfo?.id)
+}
+
 function loadSessions() {
+  const key = currentChatKey()
+  if (!key) {
+    sessions.value = []
+    return
+  }
+  migrateLegacyAiChat(userStore.userInfo?.id)
   try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+    const raw = JSON.parse(localStorage.getItem(key) || '[]')
     sessions.value = Array.isArray(raw) ? raw : []
   } catch {
     sessions.value = []
@@ -242,7 +255,9 @@ function loadSessions() {
 }
 
 function persistSessions() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions.value))
+  const key = currentChatKey()
+  if (!key) return
+  localStorage.setItem(key, JSON.stringify(sessions.value))
 }
 
 function currentSession() {
@@ -367,8 +382,18 @@ function formatConfidence(c) {
 
 async function scrollBottom() {
   await nextTick()
-  if (listRef.value) listRef.value.scrollTop = listRef.value.scrollHeight
+  const el = listRef.value
+  if (el) el.scrollTop = el.scrollHeight
 }
+
+/** 发送 / AI 回复 / 思考态出现时，消息列表滚到底部 */
+watch(
+  [messages, loading],
+  () => {
+    scrollBottom()
+  },
+  { deep: true }
+)
 
 /**
  * @returns {Promise<{ ok: boolean, answer?: string }>}
@@ -522,30 +547,47 @@ watch(
 </script>
 
 <style scoped>
+/*
+  根容器不写死 calc：由 Layout Main（flex:1）给出高度，本页 height:100% 填满至 Footer。
+  无 margin-bottom / 底 padding，白卡片贴近视口底部。
+*/
 .ai-page {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  min-height: calc(100vh - 140px);
-  padding-bottom: 24px;
+  gap: 12px;
+  overflow: hidden;
+}
+.page-title {
+  flex-shrink: 0;
 }
 .page-title h1 {
-  margin: 0 0 6px;
-  font-size: 1.5rem;
+  margin: 0 0 4px;
+  font-size: 1.35rem;
   color: #163b1f;
 }
 .page-title p {
   margin: 0;
   color: #6b7280;
-  font-size: 0.9rem;
+  font-size: 0.86rem;
 }
 
+/* 三栏父容器：列方向剩余空间全部给卡片 */
 .tri-layout {
+  flex: 1;
+  min-height: 0;
   display: flex;
   align-items: stretch;
   gap: 16px;
-  flex: 1;
-  min-height: 620px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 .card {
   background: #fff;
@@ -555,42 +597,71 @@ watch(
 .col {
   display: flex;
   flex-direction: column;
-  min-height: 620px;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
   box-sizing: border-box;
 }
+
 .col-left {
-  flex: 0 0 22%;
-  max-width: 22%;
+  flex: 1 1 0;
   padding: 16px;
-  min-width: 0;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
+
 .col-center {
-  flex: 1 1 48%;
-  min-width: 0;
+  flex: 2.2 1 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
+
 .col-right {
-  flex: 0 0 26%;
-  max-width: 26%;
+  flex: 1.2 1 0;
   padding: 18px 16px;
-  min-width: 0;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .btn-new {
   width: 100%;
   margin-bottom: 14px;
+  flex-shrink: 0;
   --el-button-bg-color: #28b446;
   --el-button-border-color: #28b446;
   --el-button-hover-bg-color: #1f8f36;
   --el-button-hover-border-color: #1f8f36;
 }
 .session-list {
-  flex: 1;
-  overflow: auto;
-  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* 细滚动条：左 / 中消息 / 右 */
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #c5cdd4 transparent;
+}
+.thin-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  border: none;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: #c5cdd4;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+}
+.thin-scroll::-webkit-scrollbar-thumb:hover {
+  background: #9aa3ad;
 }
 .session-item {
   text-align: left;
@@ -686,7 +757,8 @@ watch(
 
 .chat-list {
   flex: 1;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 18px 16px;
   background: linear-gradient(180deg, #fbfcfb, #f7f8fa);
   display: flex;
@@ -755,10 +827,11 @@ watch(
   grid-template-columns: 1fr 96px;
   gap: 10px;
   align-items: end;
-  padding: 14px 16px;
+  padding: 12px 16px 14px;
   border-top: 1px solid #eef2f0;
   background: #fff;
-  flex-shrink: 0;
+  flex-shrink: 0; /* 输入区固定在聊天栏底部，完整可见 */
+  border-radius: 0 0 16px 16px;
 }
 .send {
   height: 44px;
@@ -830,8 +903,14 @@ watch(
 }
 
 @media (max-width: 1100px) {
+  /* 窄屏：解除锁高，三栏堆叠 */
+  .ai-page {
+    height: auto;
+    overflow: visible;
+  }
   .tri-layout {
     flex-direction: column;
+    overflow: visible;
   }
   .col-left,
   .col-center,
@@ -839,13 +918,17 @@ watch(
     flex: none;
     max-width: none;
     width: 100%;
-    min-height: auto;
+    height: auto;
+  }
+  .col-left {
+    max-height: 220px;
   }
   .col-center {
-    min-height: 480px;
+    height: 560px;
+    overflow: hidden;
   }
-  .session-list {
-    max-height: 180px;
+  .col-right {
+    max-height: 320px;
   }
 }
 </style>

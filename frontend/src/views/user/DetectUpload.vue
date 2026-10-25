@@ -178,6 +178,8 @@ import { Camera, Check, Search } from '@element-plus/icons-vue'
 import { cropList } from '@/api/content'
 import { detectDisease, uploadFile } from '@/api/detection'
 import { useHistoryStore } from '@/store/history'
+import { useUserStore } from '@/store/user'
+import { LAST_DETECT_KEY } from '@/utils/userScopedCache'
 
 /** 设计稿分组：粮食 / 经济 */
 const CROP_GROUPS = [
@@ -189,6 +191,7 @@ const MAX_UPLOADS = 3
 
 const router = useRouter()
 const historyStore = useHistoryStore()
+const userStore = useUserStore()
 const apiCrops = ref([])
 const cropQuery = ref('')
 const selectedCrop = ref('')
@@ -345,10 +348,11 @@ async function onDetect() {
     const payload = {
       ...res.data,
       previewUrl: current.url,
-      cropName: selectedCrop.value || ''
+      cropName: selectedCrop.value || '',
+      userId: userStore.userInfo?.id ?? null
     }
     resultData.value = payload
-    sessionStorage.setItem('ynzz_last_detect', JSON.stringify(payload))
+    sessionStorage.setItem(LAST_DETECT_KEY, JSON.stringify(payload))
     // 同步写入本地历史；后端 detection_record 已由接口落库（含 image_path）
     historyStore.addRecord({
       id: payload.id != null ? `api-${payload.id}` : undefined,
@@ -385,8 +389,7 @@ function goDiagnosis() {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding-bottom: 40px;
-  min-height: calc(100vh - 140px);
+  padding-bottom: 24px;
 }
 
 .page-head h1 {

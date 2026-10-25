@@ -292,7 +292,6 @@ onMounted(load)
 
 <style scoped>
 .cert-page {
-  min-height: calc(100vh - 160px);
   background: #f7f8fa;
   border-radius: 16px;
   padding: 28px 20px 40px;

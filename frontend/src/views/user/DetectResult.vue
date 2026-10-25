@@ -49,9 +49,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { detectionHistory } from '@/api/detection'
+import { useUserStore } from '@/store/user'
+import { LAST_DETECT_KEY } from '@/utils/userScopedCache'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 const record = ref(null)
 const loading = ref(false)
 
@@ -91,12 +94,24 @@ function goDiagnosis() {
 }
 
 onMounted(async () => {
-  const cached = sessionStorage.getItem('ynzz_last_detect')
+  const uid = userStore.userInfo?.id
+  const cached = sessionStorage.getItem(LAST_DETECT_KEY)
   if (cached) {
-    const data = JSON.parse(cached)
-    if (!route.params.id || String(data.id) === String(route.params.id)) {
-      record.value = data
-      return
+    try {
+      const data = JSON.parse(cached)
+      const sameUser =
+        data.userId == null || uid == null || String(data.userId) === String(uid)
+      const sameRecord =
+        !route.params.id || String(data.id) === String(route.params.id)
+      if (sameUser && sameRecord) {
+        record.value = data
+        return
+      }
+      if (!sameUser) {
+        sessionStorage.removeItem(LAST_DETECT_KEY)
+      }
+    } catch {
+      sessionStorage.removeItem(LAST_DETECT_KEY)
     }
   }
   if (!route.params.id) return

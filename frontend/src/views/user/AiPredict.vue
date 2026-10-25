@@ -475,13 +475,15 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .detect-page {
-  max-width: 1440px;
+  width: 100%;
+  max-width: 100%;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding-bottom: 40px;
-  min-height: calc(100vh - 140px);
+  padding-bottom: 24px;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .page-head h1 {
@@ -496,12 +498,15 @@ onBeforeUnmount(() => {
   font-size: 0.92rem;
 }
 
+/* 三栏：用 flex-grow 比例，禁止 25%+50%+25%+gap 撑出横向滚动 */
 .workbench {
   display: flex;
   align-items: stretch;
   gap: 24px;
-  flex: 1;
+  width: 100%;
   min-height: 600px;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .panel {
@@ -512,23 +517,21 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-height: 600px;
+  min-width: 0;
   box-sizing: border-box;
 }
 
 .panel-left {
-  flex: 0 0 25%;
-  max-width: 25%;
+  flex: 1 1 0;
   min-width: 0;
 }
 .panel-center {
-  flex: 0 0 50%;
-  max-width: 50%;
+  flex: 2 1 0;
   min-width: 0;
   gap: 14px;
 }
 .panel-right {
-  flex: 0 0 25%;
-  max-width: 25%;
+  flex: 1 1 0;
   min-width: 0;
   padding: 0;
   background: transparent;
@@ -1065,8 +1068,8 @@ onBeforeUnmount(() => {
   .panel-center,
   .panel-right {
     flex: none;
-    max-width: none;
     width: 100%;
+    max-width: 100%;
     min-height: auto;
   }
   .dyn-inner {

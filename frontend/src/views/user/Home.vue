@@ -147,10 +147,10 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* 普通页：文档流排版，滚动由 Layout 的 .page-main 承担 */
 .home {
   display: flex;
   flex-direction: column;
-  /* Hero 与内容区加大留白，增强呼吸感 */
   gap: 48px;
   padding-bottom: 8px;
 }

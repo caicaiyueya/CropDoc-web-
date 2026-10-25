@@ -1,5 +1,9 @@
 <template>
-  <div class="saas-layout">
+  <!--
+    普通页：min-height:100vh 自然文档流，浏览器全局滚动，Footer 跟在内容末尾。
+    问诊页：同样文档流；定高与内部滚动由 DiagnosisChat 自身 calc 处理。
+  -->
+  <div class="saas-layout" :class="{ 'is-chat': isChatPage }">
     <header class="top-nav">
       <div class="nav-inner">
         <div class="brand" @click="$router.push('/user/home')">
@@ -42,14 +46,13 @@
       </div>
     </header>
 
-    <main class="page-main">
+    <main class="page-main" :class="{ 'page-main--chat': isChatPage }">
       <router-view />
     </main>
 
-    <footer class="site-footer">
+    <footer class="site-footer" :class="{ 'site-footer--chat': isChatPage }">
       <div class="footer-inner">
-        <div class="footer-cols">
-          <!-- 第一列：Logo + Slogan -->
+        <div v-if="!isChatPage" class="footer-cols">
           <div class="footer-col brand-col">
             <div class="footer-logo-row">
               <img src="/images/logo.png" alt="" class="footer-logo" />
@@ -58,7 +61,6 @@
             <p class="slogan">AI助力智慧农业，拍照识病、智能问诊、农友互助一站完成。</p>
           </div>
 
-          <!-- 第二列：核心功能 -->
           <div class="footer-col">
             <h4 class="col-title">核心功能</h4>
             <ul class="col-links">
@@ -68,7 +70,6 @@
             </ul>
           </div>
 
-          <!-- 第三列：帮助支持 -->
           <div class="footer-col">
             <h4 class="col-title">帮助支持</h4>
             <ul class="col-links">
@@ -78,7 +79,6 @@
             </ul>
           </div>
 
-          <!-- 第四列：联系我们 -->
           <div class="footer-col contact-col">
             <h4 class="col-title">联系我们</h4>
             <div class="contact-info">
@@ -100,11 +100,16 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 
 const store = useUserStore()
+const route = useRoute()
 const router = useRouter()
+
+const isChatPage = computed(() =>
+  route.path === '/user/ai' || route.path === '/user/ai-chat'
+)
 
 const navMenus = [
   { path: '/user/home', label: '首页' },
@@ -137,19 +142,36 @@ function onCommand(cmd) {
 </script>
 
 <style scoped>
+/*
+  普通页：min-height:100vh 自然滚动
+  问诊页（.is-chat）：锁视口，Main flex:1，供子页 height:100% 撑满至 Footer
+*/
 .saas-layout {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   background: var(--bg);
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
+.saas-layout.is-chat {
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
 .top-nav {
   position: sticky;
   top: 0;
   z-index: 100;
+  flex-shrink: 0;
   background: #ffffff;
   border-bottom: 1px solid #e5e7eb;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+.saas-layout.is-chat .top-nav {
+  position: relative;
 }
 .nav-inner {
   max-width: 1360px;
@@ -159,6 +181,7 @@ function onCommand(cmd) {
   display: flex;
   align-items: center;
   gap: 28px;
+  box-sizing: border-box;
 }
 .brand {
   display: flex;
@@ -185,6 +208,7 @@ function onCommand(cmd) {
   display: flex;
   justify-content: center;
   gap: 8px;
+  min-width: 0;
 }
 .menu-item {
   padding: 8px 16px;
@@ -193,6 +217,7 @@ function onCommand(cmd) {
   font-size: 0.95rem;
   font-weight: 500;
   transition: 0.2s ease;
+  white-space: nowrap;
 }
 .menu-item:hover { color: var(--brand); background: var(--brand-soft); }
 .menu-item.active {
@@ -224,24 +249,58 @@ function onCommand(cmd) {
   white-space: nowrap;
 }
 .caret { color: #9ca3af; font-size: 0.75rem; }
+
+/* Main：只占剩余空间，绝不内部滚动 —— 交给浏览器 */
 .page-main {
   flex: 1;
   width: 100%;
   max-width: 1360px;
   margin: 0 auto;
   padding: 24px;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
-/* Footer — 四列落地感 */
+.page-main--chat {
+  max-width: 1480px;
+  /* 顶距 24px 对齐识别页；底距 0，让白卡片贴近 Footer */
+  padding: 24px 24px 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.page-main--chat > * {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
 .site-footer {
-  margin-top: auto;
+  flex-shrink: 0;
   background: #f1f5f9;
   border-top: 1px solid #e2e8f0;
+  padding: 40px 0 20px;
+  box-sizing: border-box;
+  width: 100%;
+}
+/* 问诊精简底栏：不锁死过大 min-height，减少灰底空白感 */
+.site-footer--chat {
+  padding: 16px 0 14px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+}
+.site-footer--chat .footer-bottom {
+  border-top: none;
+  padding-top: 0;
 }
 .footer-inner {
   max-width: 1360px;
   margin: 0 auto;
-  padding: 40px 24px 22px;
+  padding: 0 24px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .footer-cols {
   display: grid;
@@ -333,11 +392,27 @@ function onCommand(cmd) {
   font-size: 0.75rem !important;
 }
 
+@media (max-width: 1100px) {
+  .saas-layout.is-chat {
+    height: auto;
+    max-height: none;
+    overflow-x: hidden;
+    overflow-y: visible;
+  }
+  .page-main--chat {
+    overflow: visible;
+  }
+  .page-main--chat > * {
+    flex: none;
+    height: auto;
+  }
+}
 @media (max-width: 900px) {
   .nav-inner { height: auto; padding: 12px 16px; flex-wrap: wrap; }
   .menu { order: 3; width: 100%; justify-content: flex-start; overflow-x: auto; }
   .user-name { display: none; }
   .page-main { padding: 16px; }
+  .page-main--chat { padding: 16px 16px 0; }
   .footer-cols { grid-template-columns: 1fr 1fr; gap: 24px; }
 }
 @media (max-width: 560px) {
