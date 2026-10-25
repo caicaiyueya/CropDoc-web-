@@ -5,9 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yunnongzhizhen.common.BusinessException;
 import com.yunnongzhizhen.entity.Disease;
 import com.yunnongzhizhen.entity.enums.DiseaseLevel;
-import com.yunnongzhizhen.entity.enums.UserRole;
 import com.yunnongzhizhen.mapper.DiseaseMapper;
-import com.yunnongzhizhen.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -15,8 +13,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 
 /**
- * 病害资料：FARMER 仅 BASIC；EXPERT/ADMIN 可看 PRO。
- * PRO 访问权限判断集中在 {@link #canAccessPro(UserRole)}。
+ * 病害资料：农户与认证农技员可见同一套常见病虫害资料，不再按 BASIC/PRO 区分。
  */
 @Service
 @RequiredArgsConstructor
@@ -25,40 +22,25 @@ public class DiseaseService {
     private final DiseaseMapper diseaseMapper;
 
     /**
-     * 权限判断集中一处：是否可访问 PRO 级病害资料。
-     *
-     * @param role 当前角色（以 DB 加载的最新 role 为准）
-     * @return true 表示可访问 PRO
-     */
-    public boolean canAccessPro(UserRole role) {
-        return role == UserRole.EXPERT || role == UserRole.ADMIN;
-    }
-
-    /**
-     * 用例：病害列表（按角色过滤层级）。
+     * 用例：病害列表（全量，不按角色过滤层级）。
      */
     public Page<Disease> listByRole(Long cropId, long page, long size) {
-        UserRole role = SecurityUtils.requireRole();
         LambdaQueryWrapper<Disease> qw = new LambdaQueryWrapper<Disease>()
                 .orderByAsc(Disease::getName);
         if (cropId != null) {
             qw.eq(Disease::getCropId, cropId);
         }
-        if (!canAccessPro(role)) {
-            qw.eq(Disease::getLevel, DiseaseLevel.BASIC);
-        }
         return diseaseMapper.selectPage(new Page<>(page, size), qw);
     }
 
     /**
-     * 用例：病害详情（PRO 权限走 canAccessPro）。
+     * 用例：病害详情。
      */
     public Disease getById(Long id) {
         Disease disease = diseaseMapper.selectById(id);
         if (disease == null) {
             throw new BusinessException("病害资料不存在");
         }
-        assertCanView(disease, SecurityUtils.requireRole());
         return disease;
     }
 
@@ -104,11 +86,5 @@ public class DiseaseService {
             throw new BusinessException("病害资料不存在");
         }
         diseaseMapper.deleteById(id);
-    }
-
-    private void assertCanView(Disease disease, UserRole role) {
-        if (disease.getLevel() == DiseaseLevel.PRO && !canAccessPro(role)) {
-            throw new BusinessException(403, "专业资料仅认证农技员可查看");
-        }
     }
 }

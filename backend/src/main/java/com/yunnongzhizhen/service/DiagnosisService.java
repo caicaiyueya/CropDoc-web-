@@ -33,23 +33,34 @@ public class DiagnosisService {
     private final ObjectMapper objectMapper;
 
     /**
-     * 用例：智能诊断对话。顺序图：加载识别记录→AiService.chatDiagnose→持久化会话
+     * 用例：智能诊断对话。
      *
-     * @param detectionRecordId 识别记录ID
+     * @param detectionRecordId 识别记录ID（可空）
      * @param sessionId         会话ID（可空，空则新建）
      * @param question          用户问题
-     * @return 会话与回复
+     * @param contextHint       无识别记录时的上下文补充
+     * @param clientHistory     前端带来的多轮历史（自由问答优先）
      */
-    public Map<String, Object> chat(Long detectionRecordId, String sessionId, String question) {
+    public Map<String, Object> chat(Long detectionRecordId, String sessionId, String question,
+                                    String contextHint, List<Map<String, String>> clientHistory) {
         if (!StringUtils.hasText(question)) {
             throw new BusinessException("问题不能为空");
         }
         Long userId = SecurityUtils.requireUserId();
-        DetectionRecord record = detectionRecordMapper.selectById(detectionRecordId);
-        if (record == null || !record.getUserId().equals(userId)) {
-            throw new BusinessException("识别记录不存在");
+
+        String context;
+        if (detectionRecordId != null) {
+            DetectionRecord record = detectionRecordMapper.selectById(detectionRecordId);
+            if (record == null || !record.getUserId().equals(userId)) {
+                throw new BusinessException("识别记录不存在");
+            }
+            context = "识别结果=" + record.getResult() + "; 描述=" + record.getDescription();
+        } else if (StringUtils.hasText(contextHint)) {
+            context = contextHint.trim();
+        } else {
+            context = "自由农技问答，无特定识别记录";
         }
-        String context = "识别结果=" + record.getResult() + "; 描述=" + record.getDescription();
+
         DiagnosisSession session = null;
         List<Map<String, String>> history = new ArrayList<>();
         if (StringUtils.hasText(sessionId)) {
@@ -66,35 +77,65 @@ public class DiagnosisService {
                 }
             }
         }
+        // 库中无历史时，使用前端传入的多轮上下文（自由问答）
+        if (history.isEmpty() && clientHistory != null && !clientHistory.isEmpty()) {
+            for (Map<String, String> m : clientHistory) {
+                if (m == null) continue;
+                String role = m.getOrDefault("role", "user");
+                String content = m.getOrDefault("content", "");
+                if (!StringUtils.hasText(content)) continue;
+                if (!"user".equals(role) && !"assistant".equals(role) && !"system".equals(role)) {
+                    role = "user";
+                }
+                history.add(Map.of("role", role, "content", content));
+            }
+        }
         String answer = aiService.chatDiagnose(history, question, context);
         history.add(Map.of("role", "user", "content", question));
         history.add(Map.of("role", "assistant", "content", answer));
 
-        LocalDateTime now = LocalDateTime.now();
-        try {
-            String contentJson = objectMapper.writeValueAsString(history);
-            if (session == null) {
-                session = new DiagnosisSession();
-                session.setDetectionRecordId(detectionRecordId);
-                session.setUserId(userId);
-                session.setSessionId(StringUtils.hasText(sessionId) ? sessionId : UUID.randomUUID().toString().replace("-", ""));
-                session.setSessionContent(contentJson);
-                session.setCreateTime(now);
-                session.setUpdateTime(now);
-                diagnosisSessionMapper.insert(session);
-            } else {
-                session.setSessionContent(contentJson);
-                session.setUpdateTime(now);
-                diagnosisSessionMapper.updateById(session);
+        String sid = StringUtils.hasText(sessionId)
+                ? sessionId
+                : (session != null ? session.getSessionId() : UUID.randomUUID().toString().replace("-", ""));
+
+        // 无识别记录时不落库（diagnosis_session.detection_record_id 非空约束）
+        if (detectionRecordId != null) {
+            LocalDateTime now = LocalDateTime.now();
+            try {
+                String contentJson = objectMapper.writeValueAsString(history);
+                if (session == null) {
+                    session = new DiagnosisSession();
+                    session.setDetectionRecordId(detectionRecordId);
+                    session.setUserId(userId);
+                    session.setSessionId(sid);
+                    session.setSessionContent(contentJson);
+                    session.setCreateTime(now);
+                    session.setUpdateTime(now);
+                    diagnosisSessionMapper.insert(session);
+                } else {
+                    session.setSessionContent(contentJson);
+                    session.setUpdateTime(now);
+                    diagnosisSessionMapper.updateById(session);
+                }
+                sid = session.getSessionId();
+            } catch (Exception e) {
+                throw new BusinessException("会话保存失败");
             }
-        } catch (Exception e) {
-            throw new BusinessException("会话保存失败");
         }
 
         Map<String, Object> result = new HashMap<>();
-        result.put("sessionId", session.getSessionId());
+        result.put("sessionId", sid);
         result.put("answer", answer);
         result.put("session", session);
         return result;
+    }
+
+    /** 兼容旧调用 */
+    public Map<String, Object> chat(Long detectionRecordId, String sessionId, String question) {
+        return chat(detectionRecordId, sessionId, question, null, null);
+    }
+
+    public Map<String, Object> chat(Long detectionRecordId, String sessionId, String question, String contextHint) {
+        return chat(detectionRecordId, sessionId, question, contextHint, null);
     }
 }

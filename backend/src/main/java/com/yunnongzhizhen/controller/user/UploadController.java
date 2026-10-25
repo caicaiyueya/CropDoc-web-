@@ -12,7 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.Map;
 
 /**
- * 文件上传 /api/user/upload。
+ * 文件上传 /api/user/upload（本地落盘；AI 识图走前端 ImgBB，不再经此后端图床转发）。
  */
 @RestController
 @RequestMapping("/api/user")

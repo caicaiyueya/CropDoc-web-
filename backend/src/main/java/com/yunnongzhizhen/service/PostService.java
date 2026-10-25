@@ -5,11 +5,13 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yunnongzhizhen.common.BusinessException;
 import com.yunnongzhizhen.entity.Comment;
 import com.yunnongzhizhen.entity.Post;
+import com.yunnongzhizhen.entity.User;
 import com.yunnongzhizhen.entity.enums.PostStatus;
 import com.yunnongzhizhen.entity.enums.PostTag;
 import com.yunnongzhizhen.entity.enums.UserRole;
 import com.yunnongzhizhen.mapper.CommentMapper;
 import com.yunnongzhizhen.mapper.PostMapper;
+import com.yunnongzhizhen.mapper.UserMapper;
 import com.yunnongzhizhen.security.LoginUser;
 import com.yunnongzhizhen.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -17,9 +19,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 社区帖子与评论业务。
@@ -30,6 +38,7 @@ public class PostService {
 
     private final PostMapper postMapper;
     private final CommentMapper commentMapper;
+    private final UserMapper userMapper;
     private final PostStatusService postStatusService;
 
     /**
@@ -63,6 +72,7 @@ public class PostService {
         post.setCreateTime(now);
         post.setUpdateTime(now);
         postMapper.insert(post);
+        fillPostAuthor(post, userMap(Set.of(user.getId())));
         return post;
     }
 
@@ -83,7 +93,9 @@ public class PostService {
         if (tag != null) {
             qw.eq(Post::getTag, tag);
         }
-        return postMapper.selectPage(new Page<>(page, size), qw);
+        Page<Post> result = postMapper.selectPage(new Page<>(page, size), qw);
+        fillPostsAuthors(result.getRecords());
+        return result;
     }
 
     /**
@@ -107,7 +119,15 @@ public class PostService {
         List<Comment> comments = commentMapper.selectList(new LambdaQueryWrapper<Comment>()
                 .eq(Comment::getPostId, id)
                 .orderByDesc(Comment::getIsQuality)
-                .orderByAsc(Comment::getCreateTime));
+                .orderByDesc(Comment::getCreateTime));
+        Set<Long> authorIds = new HashSet<>();
+        if (post.getAuthorId() != null) {
+            authorIds.add(post.getAuthorId());
+        }
+        comments.stream().map(Comment::getAuthorId).filter(Objects::nonNull).forEach(authorIds::add);
+        Map<Long, User> users = userMap(authorIds);
+        fillPostAuthor(post, users);
+        comments.forEach(c -> fillCommentAuthor(c, users));
         Map<String, Object> map = new HashMap<>();
         map.put("post", post);
         map.put("comments", comments);
@@ -137,6 +157,7 @@ public class PostService {
         comment.setCreateTime(now);
         comment.setUpdateTime(now);
         commentMapper.insert(comment);
+        fillCommentAuthor(comment, userMap(Set.of(user.getId())));
         return comment;
     }
 
@@ -155,6 +176,7 @@ public class PostService {
         comment.setIsQuality(true);
         comment.setUpdateTime(LocalDateTime.now());
         commentMapper.updateById(comment);
+        fillCommentAuthor(comment, userMap(Set.of(comment.getAuthorId())));
         return comment;
     }
 
@@ -162,10 +184,12 @@ public class PostService {
      * 管理员：待审核帖子。
      */
     public Page<Post> pendingPosts(long page, long size) {
-        return postMapper.selectPage(new Page<>(page, size),
+        Page<Post> result = postMapper.selectPage(new Page<>(page, size),
                 new LambdaQueryWrapper<Post>()
                         .eq(Post::getStatus, PostStatus.PENDING)
                         .orderByAsc(Post::getCreateTime));
+        fillPostsAuthors(result.getRecords());
+        return result;
     }
 
     public void approvePost(Long id) {
@@ -178,5 +202,44 @@ public class PostService {
 
     public void offlinePost(Long id) {
         postStatusService.offline(id);
+    }
+
+    private void fillPostsAuthors(List<Post> posts) {
+        if (posts == null || posts.isEmpty()) {
+            return;
+        }
+        Set<Long> ids = posts.stream().map(Post::getAuthorId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, User> users = userMap(ids);
+        posts.forEach(p -> fillPostAuthor(p, users));
+    }
+
+    private Map<Long, User> userMap(Set<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<User> list = userMapper.selectBatchIds(ids);
+        return list.stream().collect(Collectors.toMap(User::getId, Function.identity(), (a, b) -> a));
+    }
+
+    private void fillPostAuthor(Post post, Map<Long, User> users) {
+        if (post == null || post.getAuthorId() == null) {
+            return;
+        }
+        User u = users.get(post.getAuthorId());
+        if (u != null) {
+            post.setAuthorName(u.getNickname() != null ? u.getNickname() : u.getUsername());
+            post.setAuthorRole(u.getRole() != null ? u.getRole().name() : null);
+        }
+    }
+
+    private void fillCommentAuthor(Comment comment, Map<Long, User> users) {
+        if (comment == null || comment.getAuthorId() == null) {
+            return;
+        }
+        User u = users.get(comment.getAuthorId());
+        if (u != null) {
+            comment.setAuthorName(u.getNickname() != null ? u.getNickname() : u.getUsername());
+            comment.setAuthorRole(u.getRole() != null ? u.getRole().name() : null);
+        }
     }
 }

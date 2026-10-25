@@ -23,19 +23,32 @@ const routes = [
     redirect: '/user/home'
   },
   {
+    path: '/ai-chat',
+    redirect: (to) => ({ path: '/user/ai-chat', query: to.query })
+  },
+  { path: '/diseases', redirect: '/user/disease' },
+  { path: '/news', redirect: '/user/news' },
+  { path: '/community', redirect: '/user/community' },
+  { path: '/community/post', redirect: '/user/community/post' },
+  {
     path: '/user',
     component: () => import('@/layouts/UserLayout.vue'),
     meta: { requiresAuth: true },
     children: [
       { path: 'home', name: 'UserHome', component: () => import('@/views/user/Home.vue'), meta: { title: '首页' } },
-      { path: 'detect', name: 'DetectUpload', component: () => import('@/views/user/DetectUpload.vue'), meta: { title: '病虫害识别' } },
+      { path: 'detect', name: 'DetectUpload', component: () => import('@/views/user/AiPredict.vue'), meta: { title: '病虫害识别' } },
+      { path: 'detect-legacy', name: 'DetectUploadLegacy', component: () => import('@/views/user/DetectUpload.vue'), meta: { title: '病虫害识别(旧版)' } },
       { path: 'detect/result/:id?', name: 'DetectResult', component: () => import('@/views/user/DetectResult.vue'), meta: { title: '识别结果' } },
+      { path: 'ai', name: 'AiConsult', component: () => import('@/views/user/DiagnosisChat.vue'), meta: { title: 'AI问诊' } },
+      { path: 'ai-chat', name: 'AiChat', component: () => import('@/views/user/DiagnosisChat.vue'), meta: { title: 'AI问诊' } },
       { path: 'diagnosis/:recordId', name: 'DiagnosisChat', component: () => import('@/views/user/DiagnosisChat.vue'), meta: { title: '智能诊断' } },
-      { path: 'history', name: 'DetectHistory', component: () => import('@/views/user/DetectHistory.vue'), meta: { title: '识别历史' } },
-      { path: 'community', name: 'CommunityList', component: () => import('@/views/user/CommunityList.vue'), meta: { title: '社区' } },
+      { path: 'history', name: 'DetectHistory', component: () => import('@/views/user/DetectHistory.vue'), meta: { title: '诊断历史' } },
+      { path: 'community', name: 'CommunityList', component: () => import('@/views/user/CommunityList.vue'), meta: { title: '农友交流' } },
+      { path: 'community/post', name: 'CommunityPostCreate', component: () => import('@/views/user/PostCreate.vue'), meta: { title: '发帖' } },
       { path: 'post/:id', name: 'PostDetail', component: () => import('@/views/user/PostDetail.vue'), meta: { title: '帖子详情' } },
       { path: 'post-create', name: 'PostCreate', component: () => import('@/views/user/PostCreate.vue'), meta: { title: '发帖' } },
-      { path: 'favorites', name: 'Favorites', component: () => import('@/views/user/Favorites.vue'), meta: { title: '我的收藏' } },
+      // 个人中心已移除「我的收藏」入口；收藏 API 仍保留供后端/管理端使用
+      // { path: 'favorites', name: 'Favorites', component: () => import('@/views/user/Favorites.vue'), meta: { title: '我的收藏' } },
       { path: 'profile', name: 'Profile', component: () => import('@/views/user/Profile.vue'), meta: { title: '个人中心' } },
       { path: 'certification', name: 'CertificationApply', component: () => import('@/views/user/CertificationApply.vue'), meta: { title: '认证申请', farmerOnly: true } },
       { path: 'news', name: 'NewsList', component: () => import('@/views/user/NewsList.vue'), meta: { title: '资讯' } },

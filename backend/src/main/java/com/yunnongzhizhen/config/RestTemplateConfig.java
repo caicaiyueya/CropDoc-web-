@@ -9,15 +9,15 @@ import org.springframework.web.client.RestTemplate;
 import java.time.Duration;
 
 /**
- * RestTemplate：调用 DeepSeek OpenAI 兼容接口。
+ * RestTemplate：调用智谱 / DeepSeek 等 OpenAI 兼容接口（读超时 60s）。
  */
 @Configuration
 public class RestTemplateConfig {
 
-    @Value("${deepseek.connect-timeout-ms:10000}")
+    @Value("${zhipu.connect-timeout-ms:10000}")
     private long connectTimeoutMs;
 
-    @Value("${deepseek.read-timeout-ms:60000}")
+    @Value("${zhipu.read-timeout-ms:60000}")
     private long readTimeoutMs;
 
     /**

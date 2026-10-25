@@ -16,6 +16,7 @@ export function detectionHistory(params) {
   return request.get('/user/detection/history', { params })
 }
 
+/** 智能问诊（智谱 GLM-5，超时 60s） */
 export function diagnosisChat(data) {
-  return request.post('/user/diagnosis/chat', data)
+  return request.post('/user/diagnosis/chat', data, { timeout: 60000 })
 }

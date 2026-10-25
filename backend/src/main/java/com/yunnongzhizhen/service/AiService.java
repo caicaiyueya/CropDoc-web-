@@ -13,6 +13,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -24,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * DeepSeek（OpenAI 兼容）封装；API Key 仅后端环境变量，绝不返回前端。
+ * 大模型调用（OpenAI 兼容）。优先智谱 GLM-5，可回退 DeepSeek 配置。
  */
 @Slf4j
 @Service
@@ -35,24 +36,32 @@ public class AiService {
     private final ObjectMapper objectMapper;
     private final FileStorageService fileStorageService;
 
-    @Value("${deepseek.api-key}")
-    private String apiKey;
+    @Value("${zhipu.api-key:}")
+    private String zhipuApiKey;
 
-    @Value("${deepseek.base-url}")
-    private String baseUrl;
+    @Value("${zhipu.base-url:https://open.bigmodel.cn/api/paas/v4}")
+    private String zhipuBaseUrl;
 
-    @Value("${deepseek.vision-model}")
-    private String visionModel;
+    @Value("${zhipu.vision-model:glm-5}")
+    private String zhipuVisionModel;
 
-    @Value("${deepseek.chat-model}")
-    private String chatModel;
+    @Value("${zhipu.chat-model:glm-5}")
+    private String zhipuChatModel;
+
+    @Value("${deepseek.api-key:}")
+    private String deepseekApiKey;
+
+    @Value("${deepseek.base-url:https://api.deepseek.com}")
+    private String deepseekBaseUrl;
+
+    @Value("${deepseek.vision-model:deepseek-chat}")
+    private String deepseekVisionModel;
+
+    @Value("${deepseek.chat-model:deepseek-chat}")
+    private String deepseekChatModel;
 
     /**
      * 视觉识别：根据图片给出病害名与描述。
-     *
-     * @param imageRelativePath 图片相对路径
-     * @param cropHint          作物提示（可空）
-     * @return result/confidence/description
      */
     public Map<String, Object> detectByImage(String imageRelativePath, String cropHint) {
         try {
@@ -68,7 +77,7 @@ public class AiService {
                     + "。请用JSON返回：{\"result\":\"病害名\",\"confidence\":0.0到1.0,\"description\":\"说明\"}";
 
             ObjectNode body = objectMapper.createObjectNode();
-            body.put("model", visionModel);
+            body.put("model", resolveVisionModel());
             ArrayNode messages = body.putArray("messages");
             ObjectNode userMsg = messages.addObject();
             userMsg.put("role", "user");
@@ -89,21 +98,18 @@ public class AiService {
     }
 
     /**
-     * 诊断对话：基于识别结果多轮问答。
-     *
-     * @param history 历史消息 [{role, content}]
-     * @param question 用户问题
-     * @param context  识别上下文
-     * @return 助手回复文本
+     * 诊断对话：基于识别结果或多轮历史问答。
      */
     public String chatDiagnose(List<Map<String, String>> history, String question, String context) {
         try {
             ObjectNode body = objectMapper.createObjectNode();
-            body.put("model", chatModel);
+            body.put("model", resolveChatModel());
             ArrayNode messages = body.putArray("messages");
+            String ctx = StringUtils.hasText(context) ? context : "无特定识别结果，按通用农技问答回答";
             messages.addObject().put("role", "system")
-                    .put("content", "你是农作物病虫害诊断助手。结合识别上下文回答农户问题，给出可操作的防治建议。"
-                            + "识别上下文：" + (context != null ? context : "无"));
+                    .put("content", "你是农作物病虫害诊断助手「云农智诊」。结合识别上下文回答农户问题，"
+                            + "给出可操作的发病原因分析与防治建议，用语简洁、分点清晰。"
+                            + "识别上下文：" + ctx);
             if (history != null) {
                 for (Map<String, String> m : history) {
                     messages.addObject().put("role", m.getOrDefault("role", "user"))
@@ -112,36 +118,135 @@ public class AiService {
             }
             messages.addObject().put("role", "user").put("content", question);
             return chatCompletion(body);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.warn("AI 诊断失败: {}", e.getMessage());
             throw new BusinessException("智能诊断暂时不可用，请稍后重试");
         }
     }
 
-    private String chatCompletion(ObjectNode body) {
-        if (!org.springframework.util.StringUtils.hasText(apiKey)
-                || apiKey.contains("your_deepseek")) {
-            throw new BusinessException("未配置 DEEPSEEK_API_KEY，无法调用 AI");
+    private boolean useZhipu() {
+        return StringUtils.hasText(zhipuApiKey) && !zhipuApiKey.contains("your_");
+    }
+
+    private String resolveApiKey() {
+        if (useZhipu()) {
+            return zhipuApiKey.trim();
         }
+        if (StringUtils.hasText(deepseekApiKey) && !deepseekApiKey.contains("your_deepseek")) {
+            return deepseekApiKey.trim();
+        }
+        throw new BusinessException("未配置 ZHIPU_API_KEY（或 DEEPSEEK_API_KEY），无法调用 AI");
+    }
+
+    private String resolveBaseUrl() {
+        return useZhipu() ? zhipuBaseUrl : deepseekBaseUrl;
+    }
+
+    private String resolveChatModel() {
+        return useZhipu() ? zhipuChatModel : deepseekChatModel;
+    }
+
+    private String resolveVisionModel() {
+        return useZhipu() ? zhipuVisionModel : deepseekVisionModel;
+    }
+
+    /**
+     * 智谱：{base}/chat/completions；DeepSeek 等：{base}/v1/chat/completions
+     */
+    private String resolveCompletionsUrl() {
+        String base = resolveBaseUrl().trim();
+        while (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        if (base.contains("/paas/v4") || base.endsWith("/v4")) {
+            return base + "/chat/completions";
+        }
+        return base + "/v1/chat/completions";
+    }
+
+    private String chatCompletion(ObjectNode body) {
+        // GLM-5 默认可能走思维链，content 为空；关闭后直接返回正文
+        if (useZhipu() && !body.has("thinking")) {
+            body.putObject("thinking").put("type", "disabled");
+        }
+        String apiKey = resolveApiKey();
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(apiKey);
-        String url = baseUrl.endsWith("/") ? baseUrl + "v1/chat/completions" : baseUrl + "/v1/chat/completions";
+        String url = resolveCompletionsUrl();
         try {
-            ResponseEntity<String> resp = restTemplate.postForEntity(url, new HttpEntity<>(body.toString(), headers), String.class);
+            ResponseEntity<String> resp = restTemplate.postForEntity(
+                    url, new HttpEntity<>(body.toString(), headers), String.class);
             JsonNode root = objectMapper.readTree(resp.getBody());
-            JsonNode content = root.path("choices").path(0).path("message").path("content");
-            if (content.isMissingNode() || content.asText().isBlank()) {
+            JsonNode err = root.path("error").path("message");
+            if (!err.isMissingNode() && !err.asText("").isBlank()) {
+                throw new BusinessException("AI 调用失败：" + err.asText());
+            }
+            JsonNode message = root.path("choices").path(0).path("message");
+            String text = extractAssistantText(message);
+            if (!StringUtils.hasText(text) || "null".equalsIgnoreCase(text.trim())) {
                 throw new BusinessException("AI 返回为空");
             }
-            return content.asText();
+            return text.trim();
         } catch (RestClientException e) {
+            log.warn("AI HTTP 失败: {}", e.getMessage());
             throw new BusinessException("AI 服务超时或不可用，请稍后重试");
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
+            log.warn("AI 解析失败: {}", e.getMessage());
             throw new BusinessException("AI 调用失败");
         }
+    }
+
+    /**
+     * 解析助手正文：兼容 content 为 null / 字符串 / 多段数组，以及 reasoning_content 回退。
+     */
+    private String extractAssistantText(JsonNode message) {
+        if (message == null || message.isMissingNode() || message.isNull()) {
+            return null;
+        }
+        String content = nodeToPlainText(message.get("content"));
+        if (StringUtils.hasText(content) && !"null".equalsIgnoreCase(content.trim())) {
+            return content;
+        }
+        String reasoning = nodeToPlainText(message.get("reasoning_content"));
+        if (StringUtils.hasText(reasoning) && !"null".equalsIgnoreCase(reasoning.trim())) {
+            return reasoning;
+        }
+        return null;
+    }
+
+    private String nodeToPlainText(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        if (node.isTextual()) {
+            return node.asText();
+        }
+        if (node.isArray()) {
+            StringBuilder sb = new StringBuilder();
+            for (JsonNode part : node) {
+                if (part == null || part.isNull()) {
+                    continue;
+                }
+                if (part.isTextual()) {
+                    sb.append(part.asText());
+                } else if (part.has("text")) {
+                    sb.append(part.path("text").asText(""));
+                } else if ("text".equals(part.path("type").asText()) && part.has("text")) {
+                    sb.append(part.path("text").asText(""));
+                }
+            }
+            String s = sb.toString().trim();
+            return s.isEmpty() ? null : s;
+        }
+        if (node.isNumber() || node.isBoolean()) {
+            return node.asText();
+        }
+        return null;
     }
 
     private Map<String, Object> parseDetectReply(String reply) {

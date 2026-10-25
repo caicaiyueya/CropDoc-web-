@@ -18,7 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 阶段7：资讯、病害 BASIC/PRO、个人中心、Banner/公告/反馈、仪表盘。
+ * 阶段7：资讯、病害资料（全角色一致）、个人中心、Banner/公告/反馈、仪表盘。
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -63,7 +63,7 @@ class ContentIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(400));
 
-        // 作物 + BASIC/PRO 病害
+        // 作物 + 病害（农户与农技员可见同一套资料，不区分 BASIC/PRO）
         MvcResult cropSave = mockMvc.perform(post("/api/admin/crop/save")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -101,31 +101,11 @@ class ContentIntegrationTest {
 
         mockMvc.perform(get("/api/user/disease/list").header("Authorization", "Bearer " + farmerToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.records[?(@.level=='PRO')]").isEmpty());
+                .andExpect(jsonPath("$.data.records[?(@.name=='专业纹枯')]").isNotEmpty());
 
         mockMvc.perform(get("/api/user/disease/" + basicId).header("Authorization", "Bearer " + farmerToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.level").value("BASIC"));
-
-        mockMvc.perform(get("/api/user/disease/" + proId).header("Authorization", "Bearer " + farmerToken))
-                .andExpect(status().isForbidden());
-
-        // 升级 EXPERT 后可看 PRO
-        MvcResult cert = mockMvc.perform(post("/api/user/certification/submit")
-                        .header("Authorization", "Bearer " + farmerToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"qualificationDesc":"农技","materialPath":"/uploads/a.pdf"}
-                                """))
-                .andExpect(status().isOk())
-                .andReturn();
-        long appId = objectMapper.readTree(cert.getResponse().getContentAsString())
-                .path("data").path("id").asLong();
-        mockMvc.perform(post("/api/admin/certification/" + appId + "/approve")
-                        .header("Authorization", "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reviewComment\":\"ok\"}"))
-                .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/user/disease/" + proId).header("Authorization", "Bearer " + farmerToken))
                 .andExpect(status().isOk())
